@@ -7,9 +7,8 @@ WORKDIR /app
 COPY download_dataset.py /app/
 
 # Install required dependencies if any
-# Uncomment the line below if you have a requirements file
-# COPY requirements.txt /app/
-# RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Define the default command
 CMD ["python", "download_dataset.py"]
