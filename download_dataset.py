@@ -3,12 +3,12 @@ import tarfile
 import urllib.request
 import warnings
 warnings.filterwarnings('ignore')
-# URL of the Enron dataset
-ENRON_URL = "https://www.cs.cmu.edu/~enron/enron_mail_20150507.tar.gz"
-DATA_DIR = "enron_dataset"
+
+DATASET_URL = "https://www.cs.cmu.edu/~enron/enron_mail_20150507.tar.gz"
+DATA_DIR = "dataset"
 ARCHIVE_NAME = "enron_mail_20150507.tar.gz"
 
-#Download the Enron dataset from the given URL.
+# Download the Enron dataset from the given URL.
 def download_enron_dataset(url, save_path):
     if not os.path.exists(save_path):
         print("Downloading the Enron dataset...")
@@ -17,7 +17,7 @@ def download_enron_dataset(url, save_path):
     else:
         print("Dataset archive already exists, skipping download.")
 
-#Extract the Enron dataset.
+# Extract the Enron dataset.
 def extract_enron_dataset(archive_path, extract_to):
 
     if not os.path.exists(extract_to):
@@ -34,7 +34,3 @@ if __name__ == "__main__":
 
     # Step 2: Extract dataset
     extract_enron_dataset(ARCHIVE_NAME, DATA_DIR)
-
-
-
-
