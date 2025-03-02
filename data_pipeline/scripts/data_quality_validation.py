@@ -26,17 +26,17 @@ def validate_data(CSV_PATH, suite, context_root_dir, path, loggerName):
         data_source_name = "enron_data_source"
         try:
             data_source = context.data_sources.get(data_source_name)
-        except gx.exceptions.DataContextError:
+        except Exception:
             data_source = context.data_sources.add_pandas(data_source_name)
         data_asset_name = "enron_email_data"
         try:
             data_asset = data_source.get_asset(data_asset_name)
-        except gx.exceptions.DataContextError:
+        except Exception:
             data_asset = data_source.add_dataframe_asset(name=data_asset_name)
         batch_definition_name = "enron_batch_definition"
         try:
             batch_definition = data_asset.get_batch_definition(batch_definition_name)
-        except gx.exceptions.DataContextError:
+        except Exception:
             batch_definition = data_asset.add_batch_definition_whole_dataframe(
                 batch_definition_name
             )
