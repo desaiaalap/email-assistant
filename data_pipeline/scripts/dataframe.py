@@ -122,7 +122,7 @@ def process_enron_emails(data_dir, path, loggerName, CSV_PATH):
         )
 
         return CSV_PATH
-    except:
+    except Exception as e:
         data_preprocessing_logger.error(
             f"Error in process_enron_emails function: {e}", exc_info=True
         )
