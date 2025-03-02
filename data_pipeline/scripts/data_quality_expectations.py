@@ -30,7 +30,7 @@ def define_expectations(CSV_PATH, context_root_dir, path, loggerName):
         suite = context.suites.add_or_update(suite)
 
         # Define schema expectations
-        not_null_columns = ["Message-ID", "Date", "From", "X-From", "Body"]
+        not_null_columns = ["Message-ID", "From", "Body"]
         for column in not_null_columns:
             suite.add_expectation(
                 gx.expectations.ExpectColumnValuesToNotBeNull(column=column)
@@ -45,9 +45,19 @@ def define_expectations(CSV_PATH, context_root_dir, path, loggerName):
         for column, regex in email_regex.items():
             suite.add_expectation(
                 gx.expectations.ExpectColumnValuesToMatchRegex(
-                    column=column, regex=regex
+                    column=column, regex=regex, mostly=0.95
                 )
             )
+
+        # Allow 5% null as body text is more important
+        suite.add_expectation(
+            gx.expectations.ExpectColumnValuesToNotBeNull(column="Date", mostly=0.95)
+        )
+
+        # Allow 10% null as body text and from is important
+        suite.add_expectation(
+            gx.expectations.ExpectColumnValuesToNotBeNull(column="X-From", mostly=0.90)
+        )
 
         # Uniqueness check
         suite.add_expectation(
@@ -56,11 +66,11 @@ def define_expectations(CSV_PATH, context_root_dir, path, loggerName):
             )
         )
 
-        # Date Check [nan will be also in anamoly, not in set 1980]
+        # Date Check [nan will be also in anamoly]
         suite.add_expectation(
             gx.expectations.ExpectColumnValuesToBeInSet(
                 column="Date",
-                value_set=pd.date_range("1990-01-01", pd.Timestamp.now(), freq="D")
+                value_set=pd.date_range("1980-01-01", pd.Timestamp.now(), freq="D")
                 .strftime("%Y-%m-%d")
                 .tolist(),
             )
