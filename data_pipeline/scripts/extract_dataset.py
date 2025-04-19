@@ -6,10 +6,16 @@ and saves it to the specified directory while logging the process.
 """
 
 import os
+import sys
 import tarfile
 import warnings
 from tqdm import tqdm
 
+# Add scripts folder to sys.path
+scripts_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts"))
+sys.path.append(scripts_folder)
+
+# pylint: disable=wrong-import-position
 from create_logger import create_logger
 from get_project_root import project_root
 

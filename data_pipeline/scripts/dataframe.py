@@ -14,6 +14,11 @@ import sys
 import email
 import pandas as pd
 
+# Add scripts folder to sys.path
+scripts_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts"))
+sys.path.append(scripts_folder)
+
+# pylint: disable=wrong-import-position
 from create_logger import create_logger
 from get_project_root import project_root
 

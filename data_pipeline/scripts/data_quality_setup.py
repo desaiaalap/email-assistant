@@ -9,14 +9,19 @@ Functions:
 """
 
 import os
+import sys
 import great_expectations as gx
 
+# Add scripts folder to sys.path
+scripts_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts"))
+sys.path.append(scripts_folder)
+
+# pylint: disable=wrong-import-position
+from create_logger import create_logger
+from get_project_root import project_root
 from data_quality_expectations import define_expectations
 from data_quality_validation import validate_data
 from data_quality_anomaly import handle_anomalies
-
-from create_logger import create_logger
-from get_project_root import project_root
 
 
 def setup_gx_context_and_logger(context_root_dir, log_path, logger_name):
@@ -75,19 +80,29 @@ if __name__ == "__main__":
 
     try:
         GX_CONTEXT_ROOT_DIR = setup_gx_context_and_logger(
-            CONTEXT_ROOT_DIR, DATA_QUALITY_PATH, DATA_QUALITY_LOGGER_NAME
+            context_root_dir=CONTEXT_ROOT_DIR,
+            log_path=DATA_QUALITY_PATH,
+            logger_name=DATA_QUALITY_LOGGER_NAME,
         )
         suite = define_expectations(
-            CSV_PATH, GX_CONTEXT_ROOT_DIR, DATA_QUALITY_PATH, DATA_QUALITY_LOGGER_NAME
+            log_path=DATA_QUALITY_PATH,
+            logger_name=DATA_QUALITY_LOGGER_NAME,
+            csv_path=CSV_PATH,
+            context_root_dir=GX_CONTEXT_ROOT_DIR,
         )
         validation_results = validate_data(
-            CSV_PATH,
-            suite,
-            GX_CONTEXT_ROOT_DIR,
-            DATA_QUALITY_PATH,
-            DATA_QUALITY_LOGGER_NAME,
+            log_path=DATA_QUALITY_PATH,
+            logger_name=DATA_QUALITY_LOGGER_NAME,
+            csv_path=CSV_PATH,
+            suite_dict=suite,
+            context_root_dir=GX_CONTEXT_ROOT_DIR,
         )
-        handle_anomalies(validation_results, ANOMALY_PATH, ANOMALY_LOGGER_NAME)
+        handle_anomalies(
+            cleaned_data_path=CSV_PATH,
+            validation_results=validation_results,
+            log_path=ANOMALY_PATH,
+            logger_name=ANOMALY_LOGGER_NAME,
+        )
         print("Data quality setup and validation completed successfully.")
     except ValueError as e:
         print(f"Input error: {e}")

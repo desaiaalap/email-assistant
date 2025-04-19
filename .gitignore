@@ -9,6 +9,7 @@ email1/
 .pytest_cache/
 .env
 mail_mate_credentials.json
+mail_mate_client.json
 profile.out
 data_pipeline/data/dataset/
 data_pipeline/gx/

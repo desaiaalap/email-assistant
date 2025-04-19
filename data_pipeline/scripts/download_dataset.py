@@ -6,11 +6,17 @@ It ensures logging and handles errors gracefully.
 """
 
 import os
+import sys
 import warnings
 import requests
 from tqdm import tqdm
 from requests.exceptions import RequestException, Timeout, HTTPError
 
+# Add scripts folder to sys.path
+scripts_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts"))
+sys.path.append(scripts_folder)
+
+# pylint: disable=wrong-import-position
 from create_logger import create_logger
 from get_project_root import project_root
 

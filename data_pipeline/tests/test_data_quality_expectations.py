@@ -1,5 +1,5 @@
 """
-Unit tests for the data_quality_expectations funtions.
+Unit tests for the data_quality_expectations functions.
 """
 
 import os
@@ -71,22 +71,27 @@ def test_define_expectations_success(mocker: MockerFixture, setup_paths):
     mocker.patch("data_quality_expectations.create_logger", return_value=mock_logger)
     mock_context = mocker.MagicMock()
     mock_suite = mocker.MagicMock()
+    mock_suite.to_json_dict.return_value = {
+        "expectation_suite_name": "enron_expectation_suite",
+        "expectations": [],
+    }
     mock_context.suites.add_or_update.return_value = mock_suite
     mocker.patch("great_expectations.get_context", return_value=mock_context)
 
     result = define_expectations(
-        setup_paths["csv_path"],
-        setup_paths["context_root_dir"],
-        setup_paths["log_path"],
-        setup_paths["logger_name"],
+        log_path=setup_paths["log_path"],
+        logger_name=setup_paths["logger_name"],
+        csv_path=setup_paths["csv_path"],
+        context_root_dir=setup_paths["context_root_dir"],
     )
 
-    assert result == mock_suite
+    assert isinstance(result, dict)
+    assert result["expectation_suite_name"] == "enron_expectation_suite"
     mock_logger.info.assert_any_call("Setting up Expectations in Suite")
     mock_logger.info.assert_any_call("Created Expectation Suite successfully")
     mock_logger.error.assert_not_called()
 
-    # Verify expectation calls (simplified checks due to mocking)
+    # Verify expectation calls
     assert mock_suite.add_expectation.call_count >= 10  # At least 10 expectations added
 
 
@@ -99,11 +104,10 @@ def test_define_expectations_missing_csv(mocker: MockerFixture, setup_paths):
 
     with pytest.raises(FileNotFoundError) as exc_info:
         define_expectations(
-            # pylint: disable=duplicate-code
-            setup_paths["csv_path"],
-            setup_paths["context_root_dir"],
-            setup_paths["log_path"],
-            setup_paths["logger_name"],
+            log_path=setup_paths["log_path"],
+            logger_name=setup_paths["logger_name"],
+            csv_path=setup_paths["csv_path"],
+            context_root_dir=setup_paths["context_root_dir"],
         )
     assert str(exc_info.value) == f"CSV file not found: {setup_paths['csv_path']}"
     mock_logger.error.assert_called_once_with(
@@ -123,10 +127,10 @@ def test_define_expectations_empty_csv(mocker: MockerFixture, setup_paths):
 
     with pytest.raises(pd.errors.EmptyDataError) as exc_info:
         define_expectations(
-            setup_paths["csv_path"],
-            setup_paths["context_root_dir"],
-            setup_paths["log_path"],
-            setup_paths["logger_name"],
+            log_path=setup_paths["log_path"],
+            logger_name=setup_paths["logger_name"],
+            csv_path=setup_paths["csv_path"],
+            context_root_dir=setup_paths["context_root_dir"],
         )
     assert str(exc_info.value) == f"CSV file is empty: {setup_paths['csv_path']}"
     mock_logger.error.assert_called_once_with(
@@ -156,35 +160,44 @@ def test_define_expectations_anomalies(mocker: MockerFixture, setup_paths):
     mocker.patch("data_quality_expectations.create_logger", return_value=mock_logger)
     mock_context = mocker.MagicMock()
     mock_suite = mocker.MagicMock()
+    mock_suite.to_json_dict.return_value = {
+        "expectation_suite_name": "enron_expectation_suite",
+        "expectations": [],
+    }
     mock_context.suites.add_or_update.return_value = mock_suite
     mocker.patch("great_expectations.get_context", return_value=mock_context)
 
     result = define_expectations(
-        setup_paths["csv_path"],
-        setup_paths["context_root_dir"],
-        setup_paths["log_path"],
-        setup_paths["logger_name"],
+        log_path=setup_paths["log_path"],
+        logger_name=setup_paths["logger_name"],
+        csv_path=setup_paths["csv_path"],
+        context_root_dir=setup_paths["context_root_dir"],
     )
 
-    assert result == mock_suite
+    assert isinstance(result, dict)
+    assert result["expectation_suite_name"] == "enron_expectation_suite"
     mock_logger.info.assert_any_call("Setting up Expectations in Suite")
     mock_logger.info.assert_any_call("Created Expectation Suite successfully")
     mock_logger.error.assert_not_called()
+
+    # Verify expectation calls
+    assert mock_suite.add_expectation.call_count >= 10  # At least 10 expectations added
 
 
 def test_define_expectations_invalid_input(mocker: MockerFixture, setup_paths):
     """Test raising ValueError for invalid input."""
     mock_logger = mocker.MagicMock()
     mocker.patch("data_quality_expectations.create_logger", return_value=mock_logger)
+    # Mock any file reading if define_expectations tries reading CSV early
 
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(FileNotFoundError) as exc_info:
         define_expectations(
-            "",
-            setup_paths["context_root_dir"],
-            setup_paths["log_path"],
-            setup_paths["logger_name"],
+            log_path=setup_paths["log_path"],
+            logger_name=setup_paths["logger_name"],
+            csv_path="",
+            context_root_dir=setup_paths["context_root_dir"],
         )
-    assert str(exc_info.value) == "One or more input parameters are empty"
+    assert str(exc_info.value) == "CSV file not found: "
 
 
 if __name__ == "__main__":

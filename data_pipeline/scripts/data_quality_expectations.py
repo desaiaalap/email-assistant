@@ -5,181 +5,195 @@ This module sets up expectations for email datasets, ensuring data integrity
 and consistency in key columns like Message-ID, Date, From, To, and Body.
 
 Functions:
-    define_expectations(csv_path, context_root_dir, log_path, logger_name)
+    define_expectations(log_path, logger_name, **kwargs)
 """
 
 import os
+import sys
 import great_expectations as gx
 import pandas as pd
 
+# Add scripts folder to sys.path
+scripts_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts"))
+sys.path.append(scripts_folder)
+
+# pylint: disable=wrong-import-position
 from create_logger import create_logger
 
 
-def define_expectations(csv_path, context_root_dir, log_path, logger_name):
-    """
-    Defines data validation expectations for the dataset.
+def _add_core_expectations(suite, df):
+    """Helper to add core schema and email structure expectations."""
+    not_null_columns = ["Message-ID", "From", "Body"]
+    for column in not_null_columns:
+        suite.add_expectation(
+            gx.expectations.ExpectColumnValuesToNotBeNull(column=column)
+        )
 
-    Parameters:
-        csv_path (str): Path to the dataset.
-        context_root_dir (str): Root directory for Great Expectations context.
-        log_path (str): Path for logging.
-        logger_name (str): Name of the logger.
-
-    Returns:
-        gx.ExpectationSuite: Configured expectation suite.
-
-    Raises:
-        ValueError: If input parameters are invalid.
-        FileNotFoundError: If the CSV file doesn't exist.
-        pd.errors.EmptyDataError: If the CSV file is empty or contains no data.
-        gx.exceptions.ExpectationSuiteError: If suite creation fails.
-        Exception: For unexpected errors.
-    """
-    if not all([csv_path, context_root_dir, log_path, logger_name]):
-        raise ValueError("One or more input parameters are empty")
-
-    data_quality_logger = create_logger(log_path, logger_name)
-
-    if not os.path.exists(csv_path):
-        error_message = f"CSV file not found: {csv_path}"
-        data_quality_logger.error(error_message)
-        raise FileNotFoundError(error_message)
-
-    if os.path.getsize(csv_path) == 0:
-        error_message = f"CSV file is empty: {csv_path}"
-        data_quality_logger.error(error_message)
-        raise pd.errors.EmptyDataError(error_message)
-
-    try:
-        context = gx.get_context(context_root_dir=context_root_dir)
-        data_quality_logger.info("Setting up Expectations in Suite")
-
-        df = pd.read_csv(csv_path)
-        if df.empty:
-            error_message = f"CSV file contains no data: {csv_path}"
-            data_quality_logger.error(error_message)
-            raise pd.errors.EmptyDataError(error_message)
-
-        suite = gx.ExpectationSuite(name="enron_expectation_suite")
-        suite = context.suites.add_or_update(suite)
-
-        # Define schema expectations
-        not_null_columns = ["Message-ID", "From", "Body"]
-        for column in not_null_columns:
-            suite.add_expectation(
-                gx.expectations.ExpectColumnValuesToNotBeNull(column=column)
-            )
-
-        email_regex = {
-            "From": (r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"),
-            "To": (
-                r"^(?:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})"
-                r"(?:,\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})*$"
-            ),
-            "Cc": (
-                r"^(?:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})"
-                r"(?:,\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})*$"
-            ),
-            "Bcc": (
-                r"^(?:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})"
-                r"(?:,\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})*$"
-            ),
-        }
-        for column, regex in email_regex.items():
+    email_regex = {
+        "From": r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
+        "To": (
+            r"^(?:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})"
+            r"(?:,\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})*$"
+        ),
+        "Cc": (
+            r"^(?:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})"
+            r"(?:,\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})*$"
+        ),
+        "Bcc": (
+            r"^(?:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})"
+            r"(?:,\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})*$"
+        ),
+    }
+    for column, regex in email_regex.items():
+        if column in df.columns:
             suite.add_expectation(
                 gx.expectations.ExpectColumnValuesToMatchRegex(
                     column=column, regex=regex, mostly=0.95
                 )
             )
 
-        # Allow 5% null as body text is more important
-        suite.add_expectation(
-            gx.expectations.ExpectColumnValuesToNotBeNull(column="Date", mostly=0.95)
-        )
+    suite.add_expectation(
+        gx.expectations.ExpectColumnValuesToNotBeNull(column="Date", mostly=0.95)
+    )
+    suite.add_expectation(
+        gx.expectations.ExpectColumnValuesToNotBeNull(column="X-From", mostly=0.90)
+    )
 
-        # Allow 10% null as body text and from is important
-        suite.add_expectation(
-            gx.expectations.ExpectColumnValuesToNotBeNull(column="X-From", mostly=0.90)
-        )
 
-        # Uniqueness check
-        suite.add_expectation(
-            gx.expectations.ExpectColumnUniqueValueCountToBeBetween(
-                column="Message-ID", min_value=len(df), max_value=len(df)
-            )
+def _add_additional_expectations(suite, df):
+    """Helper to add additional expectations for date, subject, body, and cleaned columns."""
+    suite.add_expectation(
+        gx.expectations.ExpectColumnValuesToBeInSet(
+            column="Date",
+            value_set=pd.date_range("1980-01-01", pd.Timestamp.now(), freq="D")
+            .strftime("%Y-%m-%d")
+            .tolist(),
+            mostly=0.90,
         )
+    )
 
-        suite.add_expectation(
-            gx.expectations.ExpectColumnValuesToBeInSet(
-                column="Date",
-                value_set=(
-                    pd.date_range("1980-01-01", pd.Timestamp.now(), freq="D")
-                    .strftime("%Y-%m-%d")
-                    .tolist()
-                ),
-            )
+    suite.add_expectation(
+        gx.expectations.ExpectColumnValuesToNotBeNull(column="Subject", mostly=0.95)
+    )
+
+    suite.add_expectation(
+        gx.expectations.ExpectColumnValuesToMatchRegex(
+            column="Body",
+            regex=r"(?i)\b(meeting|please|need|action|do|send|review|urgent|asap|"
+            r"respond|confirm|follow-up|complete|check)\b",
+            mostly=0.50,
         )
+    )
 
-        # Thread Integrity (Summary Task)
-        # Expect Subject to be non-null for thread context
-        suite.add_expectation(
-            gx.expectations.ExpectColumnValuesToNotBeNull(column="Subject", mostly=0.95)
-        )
+    suite.add_expectation(
+        gx.expectations.ExpectColumnValuesToNotBeNull(column="To", mostly=0.95)
+    )
 
-        # Action Item Potential
-        # Expect Body to contain actionable phrases/words for some emails
-        action_phrases = (
-            r"(?i)\bmeeting\b|\bplease\b|\bneed\b|\baction\b|\bdo\b|\bsend\b|"
-            r"\breview\b|\burgent\b|\basap\b|\brespond\b|\bconfirm\b|\bfollow-up\b|"
-            r"\bcomplete\b|\bcheck\b"
-        )
-
-        suite.add_expectation(
-            gx.expectations.ExpectColumnValuesToMatchRegex(
-                column="Body",
-                regex=action_phrases,
-                mostly=0.50,
-            )
-        )
-
-        # Reply Feasibility
-        # Expect To to be present for drafting replies
+    if "thread_id" in df.columns:
         suite.add_expectation(
             gx.expectations.ExpectColumnValuesToNotBeNull(
-                column="To",
-                mostly=0.95,
+                column="thread_id", mostly=0.99
+            )
+        )
+    if "email_part" in df.columns:
+        suite.add_expectation(
+            gx.expectations.ExpectColumnValuesToBeBetween(
+                column="email_part", min_value=1
+            )
+        )
+    if "email_type" in df.columns:
+        suite.add_expectation(
+            gx.expectations.ExpectColumnValuesToBeInSet(
+                column="email_type",
+                value_set=["original", "reply", "forward", "unknown"],
             )
         )
 
-        data_quality_logger.info("Created Expectation Suite successfully")
-        return suite
 
-    except FileNotFoundError:
-        raise  # Re-raise without additional logging
-    except pd.errors.EmptyDataError:
-        raise  # Re-raise without additional logging
-    except gx.exceptions.ExpectationSuiteError as e:
-        error_message = f"Error creating expectation suite: {e}"
-        data_quality_logger.error(error_message, exc_info=True)
-        raise
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        error_message = f"Unexpected error in defining expectations: {e}"
-        data_quality_logger.error(error_message, exc_info=True)
-        raise
+def define_expectations(log_path, logger_name, **kwargs):
+    """
+    Defines a Great Expectations suite for email data validation.
 
+    Parameters:
+        log_path (str): Path for logging.
+        logger_name (str): Name of the logger.
+        **kwargs: Additional arguments, including:
+            - csv_path (str): Path to the CSV file.
+            - context_root_dir (str): Great Expectations context root directory.
+            - ti (optional): Airflow task instance for XCom.
 
-if __name__ == "__main__":
-    # Example usage (not typically run standalone)
-    from get_project_root import project_root
+    Returns:
+        dict: JSON representation of the created expectation suite.
 
-    PROJECT_ROOT_DIR = project_root()
-    CSV_PATH = f"{PROJECT_ROOT_DIR}/data_pipeline/data/enron_emails.csv"
-    CONTEXT_ROOT_DIR = f"{PROJECT_ROOT_DIR}/data_pipeline/gx"
-    LOG_PATH = f"{PROJECT_ROOT_DIR}/data_pipeline/logs/data_quality_log.log"
-    LOGGER_NAME = "data_quality_logger"
+    Raises:
+        ValueError: If required input parameters are empty or missing.
+        FileNotFoundError: If the CSV file does not exist.
+        pd.errors.EmptyDataError: If the CSV file is empty.
+    """
+
+    logger = create_logger(log_path, logger_name)
+    context_root_dir = None
+    csv_path = None
 
     try:
-        SUITE = define_expectations(CSV_PATH, CONTEXT_ROOT_DIR, LOG_PATH, LOGGER_NAME)
-        print("Expectation suite defined successfully.")
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        print(f"Error: {e}")
+        ti = kwargs.get("ti")
+        if ti:
+            context_root_dir = ti.xcom_pull(
+                task_ids="setup_gx_context_and_logger", key="return_value"
+            )
+            csv_path = ti.xcom_pull(task_ids="clean_data", key="return_value")
+    except KeyError:
+        if not all(
+            [
+                log_path,
+                logger_name,
+                kwargs.get("csv_path"),
+                kwargs.get("context_root_dir"),
+            ]
+        ):
+            # pylint: disable=raise-missing-from
+            raise ValueError("One or more input parameters are empty")
+        logger.info("Not running in Airflow context, using kwargs for paths.")
+
+    context_root_dir = context_root_dir or kwargs.get("context_root_dir")
+    csv_path = csv_path or kwargs.get("csv_path")
+
+    if context_root_dir is None or csv_path is None:
+        error_message = "Missing context_root_dir or csv_path from XCom or kwargs"
+        logger.error(error_message)
+        raise ValueError(error_message)
+
+    context = gx.get_context(context_root_dir=context_root_dir)
+
+    try:
+        logger.info("Setting up Expectations in Suite")
+        df = pd.read_csv(csv_path)
+
+        if "thread_id" in df.columns and df["thread_id"].isna().sum() > 0:
+            df["thread_id"].fillna("unknown_thread", inplace=True)
+            logger.warning("Filled missing 'thread_id' with 'unknown_thread'.")
+
+        if "email_type" in df.columns and df["email_type"].isna().sum() > 0:
+            df["email_type"].fillna("unknown", inplace=True)
+            logger.warning("Filled missing 'email_type' with 'unknown'.")
+
+        suite = gx.ExpectationSuite(name="enron_expectation_suite")
+        suite = context.suites.add_or_update(suite)
+
+        _add_core_expectations(suite, df)
+        _add_additional_expectations(suite, df)
+
+        logger.info("Created Expectation Suite successfully")
+        return suite.to_json_dict()
+
+    except FileNotFoundError as exc:
+        error_message = f"CSV file not found: {csv_path}"
+        logger.error(error_message)
+        raise FileNotFoundError(error_message) from exc
+    except pd.errors.EmptyDataError as exc:
+        error_message = f"CSV file is empty: {csv_path}"
+        logger.error(error_message)
+        raise pd.errors.EmptyDataError(error_message) from exc
+    except Exception as exc:
+        logger.error("Error in Expectations: %s", exc, exc_info=True)
+        raise

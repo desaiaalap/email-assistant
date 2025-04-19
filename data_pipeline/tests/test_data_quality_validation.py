@@ -1,5 +1,5 @@
 """
-Unit tests for the data_quality_validation funtions.
+Unit tests for the data_quality_validation functions.
 """
 
 import os
@@ -84,6 +84,13 @@ def test_validate_data_success(
     mocker.patch("data_quality_validation.create_logger", return_value=mock_logger)
     mock_context = mocker.MagicMock()
     mock_validation_result = mocker.MagicMock()
+    mock_validation_result.to_json_dict.return_value = {
+        "success": True,
+        "results": [
+            {"result": {"unexpected_count": 0}},
+            {"result": {"unexpected_count": 1}},
+        ],
+    }
 
     mocker.patch("great_expectations.get_context", return_value=mock_context)
     mock_data_source = mocker.MagicMock()
@@ -108,16 +115,20 @@ def test_validate_data_success(
     mock_validation_def.run.return_value = mock_validation_result
 
     result = validate_data(
-        setup_paths["csv_path"],
-        mock_suite,
-        setup_paths["context_root_dir"],
-        setup_paths["log_path"],
-        setup_paths["logger_name"],
+        log_path=setup_paths["log_path"],
+        logger_name=setup_paths["logger_name"],
+        csv_path=setup_paths["csv_path"],
+        suite=mock_suite,
+        context_root_dir=setup_paths["context_root_dir"],
     )
 
-    assert result == mock_validation_result
-    mock_logger.info.assert_any_call("Setting up Validation Definition to run...")
-    mock_logger.info.assert_any_call("Validations ran successfully")
+    assert isinstance(result, dict)
+    assert result["success"] is True
+    assert result["expectation_suite_name"] == "mock_suite"
+    assert result["results_count"] == 2
+    assert result["unexpected_count"] == 1
+    mock_logger.info.assert_any_call("Starting validation with Great Expectations...")
+    mock_logger.info.assert_any_call("Validations completed successfully")
     mock_logger.error.assert_not_called()
 
 
@@ -130,11 +141,11 @@ def test_validate_data_missing_csv(mocker: MockerFixture, setup_paths, mock_suit
 
     with pytest.raises(FileNotFoundError) as exc_info:
         validate_data(
-            setup_paths["csv_path"],
-            mock_suite,
-            setup_paths["context_root_dir"],
-            setup_paths["log_path"],
-            setup_paths["logger_name"],
+            log_path=setup_paths["log_path"],
+            logger_name=setup_paths["logger_name"],
+            csv_path=setup_paths["csv_path"],
+            suite=mock_suite,
+            context_root_dir=setup_paths["context_root_dir"],
         )
     assert str(exc_info.value) == f"CSV file not found: {setup_paths['csv_path']}"
     mock_logger.error.assert_called_once_with(
@@ -154,11 +165,11 @@ def test_validate_data_empty_csv(mocker: MockerFixture, setup_paths, mock_suite)
 
     with pytest.raises(pd.errors.EmptyDataError) as exc_info:
         validate_data(
-            setup_paths["csv_path"],
-            mock_suite,
-            setup_paths["context_root_dir"],
-            setup_paths["log_path"],
-            setup_paths["logger_name"],
+            log_path=setup_paths["log_path"],
+            logger_name=setup_paths["logger_name"],
+            csv_path=setup_paths["csv_path"],
+            suite=mock_suite,
+            context_root_dir=setup_paths["context_root_dir"],
         )
     assert str(exc_info.value) == f"CSV file is empty: {setup_paths['csv_path']}"
     mock_logger.error.assert_called_once_with(
@@ -203,11 +214,11 @@ def test_validate_data_validation_run_failure(
 
     with pytest.raises(gx.exceptions.ValidationError) as exc_info:
         validate_data(
-            setup_paths["csv_path"],
-            mock_suite,
-            setup_paths["context_root_dir"],
-            setup_paths["log_path"],
-            setup_paths["logger_name"],
+            log_path=setup_paths["log_path"],
+            logger_name=setup_paths["logger_name"],
+            csv_path=setup_paths["csv_path"],
+            suite=mock_suite,
+            context_root_dir=setup_paths["context_root_dir"],
         )
     assert str(exc_info.value) == "Validation run error"
     mock_logger.error.assert_called_once_with(
@@ -222,13 +233,19 @@ def test_validate_data_invalid_input(mocker: MockerFixture, setup_paths, mock_su
 
     with pytest.raises(ValueError) as exc_info:
         validate_data(
-            "",
-            mock_suite,
-            setup_paths["context_root_dir"],
-            setup_paths["log_path"],
-            setup_paths["logger_name"],
+            log_path=setup_paths["log_path"],
+            logger_name=setup_paths["logger_name"],
+            csv_path="",
+            suite=mock_suite,
+            context_root_dir=setup_paths["context_root_dir"],
         )
-    assert str(exc_info.value) == "One or more input parameters are empty"
+    assert (
+        str(exc_info.value)
+        == "Missing one or more required inputs: csv_path, suite, or context_root_dir"
+    )
+    mock_logger.error.assert_called_once_with(
+        "Missing one or more required inputs: csv_path, suite, or context_root_dir"
+    )
 
 
 if __name__ == "__main__":

@@ -136,22 +136,7 @@ The dataset is **cleaned, preprocessed, and structured** to remove redundant met
 
      - Download the credentials as json and set them in .env file as shown in .env-sample file, key=value without ""
 
-     - Code to generate refresh token, keep this file in root folder - email-assistant/gmail_refresh_token.py
-
-     ```bash
-      from google_auth_oauthlib.flow import InstalledAppFlow
-      import os
-      from dotenv import load_dotenv
-
-      SCOPES = ["https://mail.google.com/"]
-
-      flow = InstalledAppFlow.from_client_secrets_file("Path_To_Oauth_Client_credential.json", SCOPES)
-
-      creds = flow.run_local_server(port=0)
-
-      print("Refresh Token:", creds.refresh_token)
-
-     ```
+     - Code to generate refresh token, email-assistant/data_pipeline/gmail_refresh_token.py
 
      - You can skip creating GMAIL API Oauth client if you don't want to send email notifications, it will log error in anomaly task.
 

@@ -15,12 +15,20 @@ Usage:
 Functions:
     clean_and_parse_dates(csv_path, path, logger_name):
         Cleans and processes the 'Date' column in a DataFrame.
+
 """
 
 import os
+import sys
 import re
 import pandas as pd
+from airflow.operators.python import get_current_context
 
+# Add scripts folder to sys.path
+scripts_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts"))
+sys.path.append(scripts_folder)
+
+# pylint: disable=wrong-import-position
 from create_logger import create_logger
 from get_project_root import project_root
 
@@ -114,6 +122,7 @@ def clean_and_parse_dates(csv_path, log_path, logger_name):
         raise pd.errors.EmptyDataError(error_message)
 
     try:
+
         df = pd.read_csv(csv_path)
         if df.empty:
             error_message = f"CSV file contains no data: {csv_path}"
@@ -132,6 +141,16 @@ def clean_and_parse_dates(csv_path, log_path, logger_name):
         data_preprocessing_logger.info(
             "DataFrame saved to enron_emails.csv successfully."
         )
+
+        # Check if running in Airflow context before pushing to XCom
+        try:
+            context = get_current_context()
+            context["ti"].xcom_push(key="return_value", value=csv_path)
+        except Exception:  # pylint: disable=broad-exception-caught
+            data_preprocessing_logger.info(
+                "Not running in Airflow context, skipping XCom push."
+            )
+
         return csv_path
 
     except FileNotFoundError:
@@ -147,8 +166,11 @@ def clean_and_parse_dates(csv_path, log_path, logger_name):
 
 
 if __name__ == "__main__":
+
     PROJECT_ROOT_DIR = project_root()
+
     CSV_PATH = f"{PROJECT_ROOT_DIR}/data_pipeline/data/enron_emails.csv"
+
     LOG_PATH = f"{PROJECT_ROOT_DIR}/data_pipeline/logs/data_preprocessing_log.log"
     LOGGER_NAME = "data_preprocessing_logger"
 
