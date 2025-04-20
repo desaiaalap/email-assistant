@@ -16,6 +16,7 @@
         "https://mail.google.com/*"
       ],
       "js": [
+        "config.js",
         "content.js"
       ]
     }

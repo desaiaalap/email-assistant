@@ -132,11 +132,14 @@ function attachEventListeners() {
     .addEventListener("click", performAnalysis);
 
   // Make task cards clickable - toggle checkbox when clicking anywhere on the card
-  document.querySelectorAll('.task-card').forEach(card => {
-    if (!card.classList.contains('disabled')) {
-      card.addEventListener('click', (event) => {
+  document.querySelectorAll(".task-card").forEach((card) => {
+    if (!card.classList.contains("disabled")) {
+      card.addEventListener("click", (event) => {
         // Prevent double toggling when clicking directly on checkbox or label
-        if (event.target.tagName !== 'INPUT' && event.target.tagName !== 'LABEL') {
+        if (
+          event.target.tagName !== "INPUT" &&
+          event.target.tagName !== "LABEL"
+        ) {
           const checkbox = card.querySelector('input[type="checkbox"]');
           checkbox.checked = !checkbox.checked;
         }
@@ -436,14 +439,11 @@ function sendFeedback(data, task, rating) {
 
   logger.log(`Sending feedback payload: ${JSON.stringify(feedbackData)}`);
 
-  fetch(
-    "https://email-assistant-673808915782.us-central1.run.app/store_feedback",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(feedbackData),
-    }
-  )
+  fetch(CONFIG.FEEDBACK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(feedbackData),
+  })
     .then((res) => {
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);

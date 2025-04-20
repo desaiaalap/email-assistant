@@ -1,8 +1,7 @@
-const CLIENT_ID =
-  "673808915782-hgbcr3o8tjjct8pvgej9uq4599pc4k0g.apps.googleusercontent.com";
-const REDIRECT_URI = "https://dibopfifimkeojnankjcdmlkcemlifoi.chromiumapp.org";
-const SCOPES =
-  "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email";
+importScripts("config.js");
+const CLIENT_ID = CONFIG.CLIENT_ID;
+const REDIRECT_URI = CONFIG.REDIRECT_URI;
+const SCOPES = CONFIG.SCOPES;
 
 // Error types for better classification
 const ERROR_TYPES = {
@@ -412,14 +411,11 @@ function fetchThreadData(token, threadId, email, tasks, sendResponse) {
 
       console.log("Data with tasks:", data);
 
-      fetch(
-        "https://email-assistant-673808915782.us-central1.run.app/fetch_gmail_thread",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        }
-      )
+      fetch(CONFIG.SERVER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
         .then((res) => {
           if (!res.ok) {
             throw new Error(`Server error: ${res.status}`);

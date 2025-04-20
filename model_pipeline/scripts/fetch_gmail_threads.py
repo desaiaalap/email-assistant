@@ -24,6 +24,7 @@ from save_to_database import save_to_db
 from update_database import update_user_feedback
 from db_helpers import get_existing_user_feedback, get_last_3_feedbacks
 from db_connection import get_db_connection
+from initialize_db import initialize_all_tables
 from config import (
     IN_CLOUD_RUN,
     GCP_PROJECT_ID,
@@ -39,8 +40,50 @@ from monitoring_api import register_monitoring_endpoints
 if IN_CLOUD_RUN:
     from secret_manager import get_credentials_from_secret
 
+
+# Add this database initialization function
+def create_tables_if_not_exists():
+    """Initialize database tables if they don't exist."""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                # Check if tables exist
+                cur.execute(
+                    """
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_name = 'user_feedback'
+                    )
+                """
+                )
+                row = cur.fetchone()
+                if row is None:
+                    logging.error("No result returned from table existence query")
+                    raise Exception("Failed to check table existence")
+
+                # Access the 'exists' key from the RealDictRow
+                tables_exist = row["exists"]
+
+                logging.info(f"Table existence check result: {tables_exist}")
+
+                if not tables_exist:
+                    logging.info("Tables don't exist. Creating them...")
+                    # Initialize all tables using imported functions
+                    success = initialize_all_tables()
+                    if success:
+                        logging.info("All tables created successfully.")
+                    else:
+                        logging.error("Error creating some tables.")
+                else:
+                    logging.info("Tables already exist. Skipping initialization.")
+    except Exception as e:
+        logging.error(f"Error initializing database: {e}")
+
+
 # Initialize Flask application
 app = Flask(__name__)
+
+create_tables_if_not_exists()
 
 # Set up GCP Cloud Logging
 gcp_client = gcp_logging.Client(project=GCP_PROJECT_ID)
