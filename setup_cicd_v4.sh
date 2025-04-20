@@ -418,6 +418,7 @@ roles=(
   "roles/cloudscheduler.admin"
   "roles/cloudsql.admin"
   "roles/artifactregistry.admin"
+  "roles/serviceusage.serviceUsageAdmin"
 )
 
 for role in "${roles[@]}"; do
