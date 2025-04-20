@@ -971,6 +971,7 @@ if command -v gh >/dev/null 2>&1; then
         echo ${GCP_PROJECT_ID} | gh secret set GCP_PROJECT_ID --repo="$GITHUB_REPO"
         
         echo "Setting GCP_SA_KEY secret (from ${KEY_FILE})..."
+        gh secret delete GCP_SA_KEY --repo="$GITHUB_REPO" || echo "Secret GCP_SA_KEY does not exist."
         cat ${KEY_FILE} | gh secret set GCP_SA_KEY --repo="$GITHUB_REPO"
         
         echo "Setting DB_USER secret..."
