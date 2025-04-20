@@ -83,6 +83,7 @@ def process_emails(experiment_id, data_source="enron", email=None, thread_id=Non
         ]
         data_iter = enumerate(messages)
     else:
+        # Invalid data source or missing parameters
         raise ValueError("Invalid data source or missing parameters")
 
     # Track predicted outputs
