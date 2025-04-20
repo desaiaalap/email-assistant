@@ -2,17 +2,17 @@ name: Deploy MailMate Email Assistant
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
     paths:
-      - '.github/workflows/deploy.yml'
-      - 'model_pipeline/**'
-      - 'mlflow_server/**'
+      - ".github/workflows/deploy.yml"
+      - "model_pipeline/**"
+      - "mlflow_server/**"
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
     paths:
-      - '.github/workflows/deploy.yml'
-      - 'model_pipeline/**'
-      - 'mlflow_server/**'
+      - ".github/workflows/deploy.yml"
+      - "model_pipeline/**"
+      - "mlflow_server/**"
   workflow_dispatch:
 
 env:
@@ -55,408 +55,408 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       mlflow_url: ${{ steps.deploy-mlflow.outputs.mlflow_url }}
-    
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-    
-    - name: Debug GCP_SA_KEY
-      run: |
-        echo '${{ secrets.GCP_SA_KEY }}' | jq . || echo "Invalid JSON"
-      env:
-        DEBUG: true
-    
-    - name: Google Auth
-      id: auth
-      uses: google-github-actions/auth@v2
-      with:
-        credentials_json: ${{ secrets.GCP_SA_KEY }}
-        project_id: ${{ secrets.GCP_PROJECT_ID }}
-    
-    - name: Set up Google Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
-      with:
-        project_id: ${{ secrets.GCP_PROJECT_ID }}
-    
-    - name: Enable required APIs
-      run: |
-        gcloud services enable cloudbuild.googleapis.com run.googleapis.com \
-          artifactregistry.googleapis.com cloudresourcemanager.googleapis.com \
-          secretmanager.googleapis.com logging.googleapis.com monitoring.googleapis.com \
-          sqladmin.googleapis.com storage.googleapis.com --project $PROJECT_ID
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Create or verify Cloud Storage bucket for MLflow artifacts
-      run: |
-        if ! gsutil ls -b gs://$MLFLOW_BUCKET_NAME &>/dev/null; then
-          echo "Creating bucket: $MLFLOW_BUCKET_NAME"
-          gsutil mb -l $REGION gs://$MLFLOW_BUCKET_NAME
-        else
-          echo "Bucket $MLFLOW_BUCKET_NAME already exists"
-        fi
-        # Remove public access if present
-        gsutil iam ch -d allUsers:roles/storage.objectViewer gs://$MLFLOW_BUCKET_NAME || echo "No public access to remove"
-        # Grant permissions to MLflow server service account
-        SERVICE_ACCOUNT="test-mlflow-server@$PROJECT_ID.iam.gserviceaccount.com"
-        CURRENT_PERMISSIONS=$(gsutil iam get gs://$MLFLOW_BUCKET_NAME | jq -r '.bindings[] | select(.role=="roles/storage.objectAdmin") | .members[]' | grep "$SERVICE_ACCOUNT" || true)
-        if [[ -z "$CURRENT_PERMISSIONS" ]]; then
-          echo "Granting storage.objectAdmin to $SERVICE_ACCOUNT for bucket $MLFLOW_BUCKET_NAME"
-          gsutil iam ch serviceAccount:$SERVICE_ACCOUNT:roles/storage.objectAdmin gs://$MLFLOW_BUCKET_NAME
-        else
-          echo "Service account $SERVICE_ACCOUNT already has storage.objectAdmin role"
-        fi
-        # Debug bucket permissions
-        echo "Bucket IAM policy:"
-        gsutil iam get gs://$MLFLOW_BUCKET_NAME
-    
-    - name: Build and push MLflow Docker image
-      id: build-mlflow
-      run: |
-        set -e
-        cd mlflow_server
-        IMAGE_URL="us-central1-docker.pkg.dev/$PROJECT_ID/test-mlflow-repo/mlflow-server:latest"
-        
-        # Create Artifact Registry repository if it doesn't exist
-        if ! gcloud artifacts repositories describe test-mlflow-repo --location=$REGION &>/dev/null; then
-          echo "Creating Artifact Registry repository: test-mlflow-repo"
-          gcloud artifacts repositories create test-mlflow-repo --repository-format=docker --location=$REGION
-        else
-          echo "Artifact Registry repository test-mlflow-repo already exists"
-        fi
-        
-        # Run build asynchronously to avoid log streaming
-        echo "Starting Cloud Build for $IMAGE_URL..."
-        gcloud builds submit --tag $IMAGE_URL . --timeout=30m --async
-        
-        # Get the build ID
-        echo "Retrieving build ID..."
-        BUILD_ID=$(gcloud builds list --filter="images=$IMAGE_URL" --format="value(id)" --limit=1)
-        if [[ -z "$BUILD_ID" ]]; then
-          echo "Error: Could not retrieve build ID for $IMAGE_URL"
-          exit 1
-        fi
-        
-        # Poll for build completion
-        echo "Waiting for build $BUILD_ID to complete..."
-        while true; do
-          BUILD_STATUS=$(gcloud builds describe $BUILD_ID --format="value(status)")
-          case "$BUILD_STATUS" in
-            "SUCCESS")
-              echo "Build $BUILD_ID completed successfully"
-              break
-              ;;
-            "FAILURE"|"CANCELLED"|"TIMEOUT")
-              echo "Error: Build $BUILD_ID failed with status $BUILD_STATUS"
-              gcloud builds log $BUILD_ID
-              exit 1
-              ;;
-            *)
-              echo "Build $BUILD_ID status: $BUILD_STATUS. Waiting..."
-              sleep 10
-              ;;
-          esac
-        done
-        
-        echo "Build completed successfully. Image pushed to $IMAGE_URL"
-        echo "image=$IMAGE_URL" >> $GITHUB_OUTPUT
-        
-    - name: Create or verify Cloud SQL for MLflow
-      run: |
-        # Check if MLflow database instance exists
-        if ! gcloud sql instances describe $MLFLOW_DB_INSTANCE &>/dev/null; then
-          echo "Creating Cloud SQL instance for MLflow: $MLFLOW_DB_INSTANCE"
-          gcloud sql instances create $MLFLOW_DB_INSTANCE \
-            --database-version=POSTGRES_16 \
-            --tier=db-custom-1-3840 \
-            --edition=enterprise \
-            --region=$REGION \
-            --root-password=${{ secrets.DB_PASSWORD }} \
-            --storage-type=SSD \
-            --storage-size=10GB \
-            --availability-type=ZONAL \
-            --no-backup
-            
-          # Create MLflow database
-          echo "Creating MLflow database"
-          gcloud sql databases create mlflow --instance=$MLFLOW_DB_INSTANCE
-        else
-          echo "MLflow Cloud SQL instance already exists: $MLFLOW_DB_INSTANCE"
-        fi
-    
-    - name: Setup Service Account for MLflow Server
-      run: |
-        # Create service account for MLflow server if it doesn't exist
-        MLFLOW_SA_EMAIL="$MLFLOW_SERVICE_NAME@$PROJECT_ID.iam.gserviceaccount.com"
-        
-        if ! gcloud iam service-accounts describe $MLFLOW_SA_EMAIL &>/dev/null; then
-          echo "Creating service account for MLflow server: $MLFLOW_SA_EMAIL"
-          gcloud iam service-accounts create $MLFLOW_SERVICE_NAME --display-name="MLflow Server Service Account"
-          # Add delay to ensure service account is fully propagated
-          echo "Waiting for service account to be fully available..."
-          sleep 10
-          # Grant required roles
-          gcloud projects add-iam-policy-binding $PROJECT_ID \
-            --member="serviceAccount:$MLFLOW_SA_EMAIL" \
-            --role="roles/cloudsql.client"
-            
-          gcloud projects add-iam-policy-binding $PROJECT_ID \
-            --member="serviceAccount:$MLFLOW_SA_EMAIL" \
-            --role="roles/storage.objectAdmin"
-        else
-          echo "MLflow service account already exists: $MLFLOW_SA_EMAIL"
-        fi
-        
-        # Store the service account email for Cloud Run deployment
-        echo "mlflow_sa=$MLFLOW_SA_EMAIL" >> $GITHUB_OUTPUT
-    
-    - name: Deploy MLflow Server to Cloud Run
-      id: deploy-mlflow
-      run: |
-        set -e
-        MLFLOW_CONNECTION_NAME="${PROJECT_ID}:${REGION}:${MLFLOW_DB_INSTANCE}"
-        MLFLOW_SA_EMAIL="$MLFLOW_SERVICE_NAME@$PROJECT_ID.iam.gserviceaccount.com"
-        
-        if [[ -z "$MLFLOW_SA_EMAIL" ]]; then
-          echo "Error: MLflow Server Service Account not found"
-          exit 1
-        fi
+      - name: Debug GCP_SA_KEY
+        run: |
+          echo '${{ secrets.GCP_SA_KEY }}' | jq . || echo "Invalid JSON"
+        env:
+          DEBUG: true
 
-        echo "Using service account: $MLFLOW_SA_EMAIL"
-        
-        # Check if the Cloud Run service exists and has the mlflow_bucket volume
-        VOLUME_EXISTS=false
-        if gcloud run services describe $MLFLOW_SERVICE_NAME --region $REGION &>/dev/null; then
-          echo "Checking for existing mlflow_bucket volume in $MLFLOW_SERVICE_NAME..."
-          VOLUME_CONFIG=$(gcloud run services describe $MLFLOW_SERVICE_NAME --region $REGION --format="value(spec.volumes[?name=='mlflow_bucket'].name)")
-          if [[ "$VOLUME_CONFIG" == "mlflow_bucket" ]]; then
-            echo "Volume mlflow_bucket already exists for $MLFLOW_SERVICE_NAME"
-            VOLUME_EXISTS=true
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Enable required APIs
+        run: |
+          gcloud services enable cloudbuild.googleapis.com run.googleapis.com \
+            artifactregistry.googleapis.com cloudresourcemanager.googleapis.com \
+            secretmanager.googleapis.com logging.googleapis.com monitoring.googleapis.com \
+            sqladmin.googleapis.com storage.googleapis.com --project $PROJECT_ID
+
+      - name: Create or verify Cloud Storage bucket for MLflow artifacts
+        run: |
+          if ! gsutil ls -b gs://$MLFLOW_BUCKET_NAME &>/dev/null; then
+            echo "Creating bucket: $MLFLOW_BUCKET_NAME"
+            gsutil mb -l $REGION gs://$MLFLOW_BUCKET_NAME
           else
-            echo "No mlflow_bucket volume found in $MLFLOW_SERVICE_NAME"
+            echo "Bucket $MLFLOW_BUCKET_NAME already exists"
           fi
-        else
-          echo "Cloud Run service $MLFLOW_SERVICE_NAME does not exist yet"
-        fi
-        
-        # Add volume if it doesn't exist
-        if [[ "$VOLUME_EXISTS" == "false" ]]; then
-          echo "Adding volume mlflow_bucket for $MLFLOW_SERVICE_NAME..."
-          gcloud run services update $MLFLOW_SERVICE_NAME \
-            --add-volume=name=mlflow_bucket,type=cloud-storage,bucket=$MLFLOW_BUCKET_NAME \
+          # Remove public access if present
+          gsutil iam ch -d allUsers:roles/storage.objectViewer gs://$MLFLOW_BUCKET_NAME || echo "No public access to remove"
+          # Grant permissions to MLflow server service account
+          SERVICE_ACCOUNT="test-mlflow-server@$PROJECT_ID.iam.gserviceaccount.com"
+          CURRENT_PERMISSIONS=$(gsutil iam get gs://$MLFLOW_BUCKET_NAME | jq -r '.bindings[] | select(.role=="roles/storage.objectAdmin") | .members[]' | grep "$SERVICE_ACCOUNT" || true)
+          if [[ -z "$CURRENT_PERMISSIONS" ]]; then
+            echo "Granting storage.objectAdmin to $SERVICE_ACCOUNT for bucket $MLFLOW_BUCKET_NAME"
+            gsutil iam ch serviceAccount:$SERVICE_ACCOUNT:roles/storage.objectAdmin gs://$MLFLOW_BUCKET_NAME
+          else
+            echo "Service account $SERVICE_ACCOUNT already has storage.objectAdmin role"
+          fi
+          # Debug bucket permissions
+          echo "Bucket IAM policy:"
+          gsutil iam get gs://$MLFLOW_BUCKET_NAME
+
+      - name: Build and push MLflow Docker image
+        id: build-mlflow
+        run: |
+          set -e
+          cd mlflow_server
+          IMAGE_URL="us-central1-docker.pkg.dev/$PROJECT_ID/test-mlflow-repo/mlflow-server:latest"
+
+          # Create Artifact Registry repository if it doesn't exist
+          if ! gcloud artifacts repositories describe test-mlflow-repo --location=$REGION &>/dev/null; then
+            echo "Creating Artifact Registry repository: test-mlflow-repo"
+            gcloud artifacts repositories create test-mlflow-repo --repository-format=docker --location=$REGION
+          else
+            echo "Artifact Registry repository test-mlflow-repo already exists"
+          fi
+
+          # Run build asynchronously to avoid log streaming
+          echo "Starting Cloud Build for $IMAGE_URL..."
+          gcloud builds submit --tag $IMAGE_URL . --timeout=30m --async
+
+          # Get the build ID
+          echo "Retrieving build ID..."
+          BUILD_ID=$(gcloud builds list --filter="images=$IMAGE_URL" --format="value(id)" --limit=1)
+          if [[ -z "$BUILD_ID" ]]; then
+            echo "Error: Could not retrieve build ID for $IMAGE_URL"
+            exit 1
+          fi
+
+          # Poll for build completion
+          echo "Waiting for build $BUILD_ID to complete..."
+          while true; do
+            BUILD_STATUS=$(gcloud builds describe $BUILD_ID --format="value(status)")
+            case "$BUILD_STATUS" in
+              "SUCCESS")
+                echo "Build $BUILD_ID completed successfully"
+                break
+                ;;
+              "FAILURE"|"CANCELLED"|"TIMEOUT")
+                echo "Error: Build $BUILD_ID failed with status $BUILD_STATUS"
+                gcloud builds log $BUILD_ID
+                exit 1
+                ;;
+              *)
+                echo "Build $BUILD_ID status: $BUILD_STATUS. Waiting..."
+                sleep 10
+                ;;
+            esac
+          done
+
+          echo "Build completed successfully. Image pushed to $IMAGE_URL"
+          echo "image=$IMAGE_URL" >> $GITHUB_OUTPUT
+
+      - name: Create or verify Cloud SQL for MLflow
+        run: |
+          # Check if MLflow database instance exists
+          if ! gcloud sql instances describe $MLFLOW_DB_INSTANCE &>/dev/null; then
+            echo "Creating Cloud SQL instance for MLflow: $MLFLOW_DB_INSTANCE"
+            gcloud sql instances create $MLFLOW_DB_INSTANCE \
+              --database-version=POSTGRES_16 \
+              --tier=db-custom-1-3840 \
+              --edition=enterprise \
+              --region=$REGION \
+              --root-password=${{ secrets.DB_PASSWORD }} \
+              --storage-type=SSD \
+              --storage-size=10GB \
+              --availability-type=ZONAL \
+              --no-backup
+              
+            # Create MLflow database
+            echo "Creating MLflow database"
+            gcloud sql databases create mlflow --instance=$MLFLOW_DB_INSTANCE
+          else
+            echo "MLflow Cloud SQL instance already exists: $MLFLOW_DB_INSTANCE"
+          fi
+
+      - name: Setup Service Account for MLflow Server
+        run: |
+          # Create service account for MLflow server if it doesn't exist
+          MLFLOW_SA_EMAIL="$MLFLOW_SERVICE_NAME@$PROJECT_ID.iam.gserviceaccount.com"
+
+          if ! gcloud iam service-accounts describe $MLFLOW_SA_EMAIL &>/dev/null; then
+            echo "Creating service account for MLflow server: $MLFLOW_SA_EMAIL"
+            gcloud iam service-accounts create $MLFLOW_SERVICE_NAME --display-name="MLflow Server Service Account"
+            # Add delay to ensure service account is fully propagated
+            echo "Waiting for service account to be fully available..."
+            sleep 10
+            # Grant required roles
+            gcloud projects add-iam-policy-binding $PROJECT_ID \
+              --member="serviceAccount:$MLFLOW_SA_EMAIL" \
+              --role="roles/cloudsql.client"
+              
+            gcloud projects add-iam-policy-binding $PROJECT_ID \
+              --member="serviceAccount:$MLFLOW_SA_EMAIL" \
+              --role="roles/storage.objectAdmin"
+          else
+            echo "MLflow service account already exists: $MLFLOW_SA_EMAIL"
+          fi
+
+          # Store the service account email for Cloud Run deployment
+          echo "mlflow_sa=$MLFLOW_SA_EMAIL" >> $GITHUB_OUTPUT
+
+      - name: Deploy MLflow Server to Cloud Run
+        id: deploy-mlflow
+        run: |
+          set -e
+          MLFLOW_CONNECTION_NAME="${PROJECT_ID}:${REGION}:${MLFLOW_DB_INSTANCE}"
+          MLFLOW_SA_EMAIL="$MLFLOW_SERVICE_NAME@$PROJECT_ID.iam.gserviceaccount.com"
+
+          if [[ -z "$MLFLOW_SA_EMAIL" ]]; then
+            echo "Error: MLflow Server Service Account not found"
+            exit 1
+          fi
+
+          echo "Using service account: $MLFLOW_SA_EMAIL"
+
+          # Check if the Cloud Run service exists and has the mlflow_bucket volume
+          VOLUME_EXISTS=false
+          if gcloud run services describe $MLFLOW_SERVICE_NAME --region $REGION &>/dev/null; then
+            echo "Checking for existing mlflow_bucket volume in $MLFLOW_SERVICE_NAME..."
+            VOLUME_CONFIG=$(gcloud run services describe $MLFLOW_SERVICE_NAME --region $REGION --format="value(spec.volumes[?name=='mlflow_bucket'].name)")
+            if [[ "$VOLUME_CONFIG" == "mlflow_bucket" ]]; then
+              echo "Volume mlflow_bucket already exists for $MLFLOW_SERVICE_NAME"
+              VOLUME_EXISTS=true
+            else
+              echo "No mlflow_bucket volume found in $MLFLOW_SERVICE_NAME"
+            fi
+          else
+            echo "Cloud Run service $MLFLOW_SERVICE_NAME does not exist yet"
+          fi
+
+          # Add volume if it doesn't exist
+          if [[ "$VOLUME_EXISTS" == "false" ]]; then
+            echo "Adding volume mlflow_bucket for $MLFLOW_SERVICE_NAME..."
+            gcloud run services update $MLFLOW_SERVICE_NAME \
+              --add-volume=name=mlflow_bucket,type=cloud-storage,bucket=$MLFLOW_BUCKET_NAME \
+              --region $REGION \
+              2>/dev/null || echo "Service does not exist, volume will be added during deployment"
+          fi
+
+          # Deploy MLflow server to Cloud Run
+          echo "Deploying MLflow server to Cloud Run..."
+          gcloud run deploy $MLFLOW_SERVICE_NAME \
+            --image ${{ steps.build-mlflow.outputs.image }} \
+            --platform managed \
             --region $REGION \
-            2>/dev/null || echo "Service does not exist, volume will be added during deployment"
-        fi
-        
-        # Deploy MLflow server to Cloud Run
-        echo "Deploying MLflow server to Cloud Run..."
-        gcloud run deploy $MLFLOW_SERVICE_NAME \
-          --image ${{ steps.build-mlflow.outputs.image }} \
-          --platform managed \
-          --region $REGION \
-          --service-account "$MLFLOW_SA_EMAIL" \
-          --allow-unauthenticated \
-          --min-instances 0 \
-          --max-instances 1 \
-          --memory 512Mi \
-          --cpu 1 \
-          --port 5000 \
-          --set-env-vars "MLFLOW_BACKEND_STORE_URI=postgresql+psycopg2://$DB_USER:$DB_PASSWORD@/mlflow?host=/cloudsql/$MLFLOW_CONNECTION_NAME,MLFLOW_DEFAULT_ARTIFACT_ROOT=gs://$MLFLOW_BUCKET_NAME/mlflow-artifacts" \
-          --add-cloudsql-instances $MLFLOW_CONNECTION_NAME \
-          --add-volume=name=mlflow_bucket,type=cloud-storage,bucket=$MLFLOW_BUCKET_NAME \
-          --add-volume-mount=volume=mlflow_bucket,mount-path=/mnt/gcs \
-          --timeout 300s
-        
-        # Get the MLflow service URL and save it for the email assistant deployment
-        MLFLOW_URL=$(gcloud run services describe $MLFLOW_SERVICE_NAME --region $REGION --format="value(status.url)")
-        echo "MLFLOW_TRACKING_URI=$MLFLOW_URL" >> $GITHUB_ENV
-        
-        echo "Mlflow server deployed successfully at: $MLFLOW_URL"
-        # Store the MLflow URL as a GitHub output
-        echo "mlflow_url=$MLFLOW_URL" >> $GITHUB_OUTPUT
+            --service-account "$MLFLOW_SA_EMAIL" \
+            --allow-unauthenticated \
+            --min-instances 0 \
+            --max-instances 1 \
+            --memory 512Mi \
+            --cpu 1 \
+            --port 5000 \
+            --set-env-vars "MLFLOW_BACKEND_STORE_URI=postgresql+psycopg2://$DB_USER:$DB_PASSWORD@/mlflow?host=/cloudsql/$MLFLOW_CONNECTION_NAME,MLFLOW_DEFAULT_ARTIFACT_ROOT=gs://$MLFLOW_BUCKET_NAME/mlflow-artifacts" \
+            --add-cloudsql-instances $MLFLOW_CONNECTION_NAME \
+            --add-volume=name=mlflow_bucket,type=cloud-storage,bucket=$MLFLOW_BUCKET_NAME \
+            --add-volume-mount=volume=mlflow_bucket,mount-path=/mnt/gcs \
+            --timeout 300s
+
+          # Get the MLflow service URL and save it for the email assistant deployment
+          MLFLOW_URL=$(gcloud run services describe $MLFLOW_SERVICE_NAME --region $REGION --format="value(status.url)")
+          echo "MLFLOW_TRACKING_URI=$MLFLOW_URL" >> $GITHUB_ENV
+
+          echo "Mlflow server deployed successfully at: $MLFLOW_URL"
+          # Store the MLflow URL as a GitHub output
+          echo "mlflow_url=$MLFLOW_URL" >> $GITHUB_OUTPUT
 
   build-and-deploy-email:
     name: Build and Deploy Email Assistant
     needs: build-and-deploy-mlflow
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-    
-    - name: Google Auth
-      id: auth
-      uses: google-github-actions/auth@v2
-      with:
-        credentials_json: ${{ secrets.GCP_SA_KEY }}
-        project_id: ${{ secrets.GCP_PROJECT_ID }}
-    
-    - name: Set up Google Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
-      with:
-        project_id: ${{ secrets.GCP_PROJECT_ID }}
-    
-    - name: Enable required APIs
-      run: |
-        gcloud services enable cloudbuild.googleapis.com run.googleapis.com \
-          artifactregistry.googleapis.com cloudresourcemanager.googleapis.com \
-          secretmanager.googleapis.com logging.googleapis.com monitoring.googleapis.com \
-          sqladmin.googleapis.com --project $PROJECT_ID
-    
-    - name: Create or verify Cloud SQL for Email Assistant
-      run: |
-        # Check if Email database instance exists
-        if ! gcloud sql instances describe $EMAIL_DB_INSTANCE &>/dev/null; then
-          echo "Creating Cloud SQL instance for Email Assistant: $EMAIL_DB_INSTANCE"
-          gcloud sql instances create $EMAIL_DB_INSTANCE \
-            --database-version=POSTGRES_16 \
-            --tier=db-custom-1-3840 \
-            --edition=enterprise \
-            --region=$REGION \
-            --root-password=${{ secrets.DB_PASSWORD }} \
-            --storage-type=SSD \
-            --storage-size=10GB \
-            --availability-type=ZONAL \
-            --no-backup
-            
-          # Create email database
-          echo "Creating mail_mate_user_data database"
-          gcloud sql databases create $DB_NAME --instance=$EMAIL_DB_INSTANCE
-        else
-          echo "Email Cloud SQL instance already exists: $EMAIL_DB_INSTANCE"
-        fi
-    
-    - name: Setup Service Account for Email Assistant
-      id: setup-email-sa
-      run: |
-        # Create service account for Email Assistant if it doesn't exist
-        EMAIL_SA_NAME="test-email-assistant"
-        EMAIL_SA_EMAIL="$EMAIL_SA_NAME@$PROJECT_ID.iam.gserviceaccount.com"
-        
-        if ! gcloud iam service-accounts describe $EMAIL_SA_EMAIL &>/dev/null; then
-          echo "Creating service account for Email Assistant: $EMAIL_SA_EMAIL"
-          gcloud iam service-accounts create $EMAIL_SA_NAME --display-name="Email Assistant Service Account"
-          # Add delay to ensure service account is fully propagated
-          echo "Waiting for service account to be fully available..."
-          sleep 10
-        else
-          echo "Email Assistant service account already exists: $EMAIL_SA_EMAIL"
-        fi
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-        echo "Granting Secret Manager Access role..."
-        if gcloud projects add-iam-policy-binding $PROJECT_ID \
-          --member="serviceAccount:$EMAIL_SA_EMAIL" \
-          --role="roles/secretmanager.secretAccessor"; then
-          echo "Successfully granted Secret Manager Access role"
-        else
-          echo "Error granting Secret Manager Access role"
-          exit 1
-        fi
-        
-        echo "Granting Logging Writer role..."
-        if gcloud projects add-iam-policy-binding $PROJECT_ID \
-          --member="serviceAccount:$EMAIL_SA_EMAIL" \
-          --role="roles/logging.logWriter"; then
-          echo "Successfully granted Logging Writer role"
-        else
-          echo "Error granting Logging Writer role"
-          exit 1
-        fi
-        
-        # Verify roles were added
-        echo "Verifying roles..."
-        ROLES=$(gcloud projects get-iam-policy $PROJECT_ID \
-          --flatten="bindings[].members" \
-          --format="value(bindings.role)" \
-          --filter="bindings.members:serviceAccount:$EMAIL_SA_EMAIL")
-        echo "Assigned roles: $ROLES"
-        
-        # Store the service account email for Cloud Run deployment
-        echo "email_sa=$EMAIL_SA_EMAIL" >> $GITHUB_OUTPUT
-    
-    - name: Build and push Docker image
-      id: build
-      run: |
-        set -e
-        cd model_pipeline
-        IMAGE_URL="gcr.io/$PROJECT_ID/$EMAIL_SERVICE_NAME:$(date +%Y%m%d-%H%M%S)"
-        
-        # Run build asynchronously to avoid log streaming
-        echo "Starting Cloud Build for $IMAGE_URL..."
-        gcloud builds submit --tag $IMAGE_URL . --timeout=30m --async
-        
-        # Get the build ID
-        echo "Retrieving build ID..."
-        BUILD_ID=$(gcloud builds list --filter="images=$IMAGE_URL" --format="value(id)" --limit=1)
-        if [[ -z "$BUILD_ID" ]]; then
-          echo "Error: Could not retrieve build ID for $IMAGE_URL"
-          exit 1
-        fi
-        
-        # Poll for build completion
-        echo "Waiting for build $BUILD_ID to complete..."
-        while true; do
-          BUILD_STATUS=$(gcloud builds describe $BUILD_ID --format="value(status)")
-          case "$BUILD_STATUS" in
-            "SUCCESS")
-              echo "Build $BUILD_ID completed successfully"
-              break
-              ;;
-            "FAILURE"|"CANCELLED"|"TIMEOUT")
-              echo "Error: Build $BUILD_ID failed with status $BUILD_STATUS"
-              gcloud builds log $BUILD_ID
-              exit 1
-              ;;
-            *)
-              echo "Build $BUILD_ID status: $BUILD_STATUS. Waiting..."
-              sleep 10
-              ;;
-          esac
-        done
-        
-        echo "Build completed successfully. Image pushed to $IMAGE_URL"
-        echo "image=$IMAGE_URL" >> $GITHUB_OUTPUT
-    
-    - name: Deploy to Cloud Run
-      run: |
-        MLFLOW_URL="${{ needs.build-and-deploy-mlflow.outputs.mlflow_url }}"
-        echo "MLflow URL from previous job: '$MLFLOW_URL'"
-        if [[ -z "$MLFLOW_URL" ]]; then
-          echo "Warning: MLflow URL not available from previous job, using environment variable"
-          MLFLOW_URL="$MLFLOW_TRACKING_URI"
-          echo "MLflow URL from environment: '$MLFLOW_URL'"
-          if [[ -z "$MLFLOW_URL" ]]; then
-            echo "Warning: No MLflow URL available, using default"
-            MLFLOW_URL="https://test-mlflow-server-$PROJECT_ID.$REGION.run.app"
-            echo "Using default MLflow URL: $MLFLOW_URL"
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Enable required APIs
+        run: |
+          gcloud services enable cloudbuild.googleapis.com run.googleapis.com \
+            artifactregistry.googleapis.com cloudresourcemanager.googleapis.com \
+            secretmanager.googleapis.com logging.googleapis.com monitoring.googleapis.com \
+            sqladmin.googleapis.com --project $PROJECT_ID
+
+      - name: Create or verify Cloud SQL for Email Assistant
+        run: |
+          # Check if Email database instance exists
+          if ! gcloud sql instances describe $EMAIL_DB_INSTANCE &>/dev/null; then
+            echo "Creating Cloud SQL instance for Email Assistant: $EMAIL_DB_INSTANCE"
+            gcloud sql instances create $EMAIL_DB_INSTANCE \
+              --database-version=POSTGRES_16 \
+              --tier=db-custom-1-3840 \
+              --edition=enterprise \
+              --region=$REGION \
+              --root-password=${{ secrets.DB_PASSWORD }} \
+              --storage-type=SSD \
+              --storage-size=10GB \
+              --availability-type=ZONAL \
+              --no-backup
+              
+            # Create email database
+            echo "Creating mail_mate_user_data database"
+            gcloud sql databases create $DB_NAME --instance=$EMAIL_DB_INSTANCE
+          else
+            echo "Email Cloud SQL instance already exists: $EMAIL_DB_INSTANCE"
           fi
-        fi
-        EMAIL_CONNECTION_NAME="${PROJECT_ID}:${REGION}:${EMAIL_DB_INSTANCE}"
-        EMAIL_SA_EMAIL="${{ steps.setup-email-sa.outputs.email_sa }}"
-        if [[ -z "$EMAIL_SA_EMAIL" ]]; then
-          echo "Warning: Email service account not available, using direct construction"
-          EMAIL_SA_EMAIL="$EMAIL_SERVICE_NAME@$PROJECT_ID.iam.gserviceaccount.com"
-        fi
 
-        echo "Using service account: $EMAIL_SA_EMAIL"
-        echo "Using MLflow URL: $MLFLOW_URL"
-        
-        gcloud run deploy $EMAIL_SERVICE_NAME \
-          --image ${{ steps.build.outputs.image }} \
-          --platform managed \
-          --region $REGION \
-          --service-account $EMAIL_SA_EMAIL \
-          --allow-unauthenticated \
-          --min-instances $MIN_INSTANCES \
-          --max-instances $MAX_INSTANCES \
-          --memory $MEMORY \
-          --cpu $CPU \
-          --timeout $TIMEOUT \
-          --concurrency $CONCURRENCY \
-          --set-env-vars "DB_NAME=$DB_NAME,DB_USER=$DB_USER,DB_PASSWORD=$DB_PASSWORD,DB_HOST=$DB_HOST,DB_PORT=$DB_PORT,GCP_LOCATION=$GCP_LOCATION,GEMINI_MODEL=$GEMINI_MODEL,DB_SOCKET_DIR=$DB_SOCKET_DIR,INSTANCE_CONNECTION_NAME=$EMAIL_CONNECTION_NAME,MLFLOW_TRACKING_URI=$MLFLOW_URL,NOTIFICATION_SENDER_EMAIL=$NOTIFICATION_SENDER_EMAIL,NOTIFICATION_RECIPIENT_EMAIL=$NOTIFICATION_RECIPIENT_EMAIL,MLFLOW_EXPERIMENT_NAME=$MLFLOW_EXPERIMENT_NAME,FLASK_PORT=$FLASK_PORT,GMAIL_API_SECRET_ID=$GMAIL_API_SECRET_ID,GMAIL_NOTIFICATION_SECRET_ID=$GMAIL_NOTIFICATION_SECRET_ID,SERVICE_ACCOUNT_SECRET_ID=$SERVICE_ACCOUNT_SECRET_ID" \
-          --add-cloudsql-instances=$EMAIL_CONNECTION_NAME \
-          --command="python" \
-          --args="scripts/fetch_gmail_threads.py"
-    
-    - name: Get Service URL
-      run: |
-        SERVICE_URL=$(gcloud run services describe $EMAIL_SERVICE_NAME --region $REGION --format 'value(status.url)')
-        echo "::notice::Deployment successful! Service URL: $SERVICE_URL"
+      - name: Setup Service Account for Email Assistant
+        id: setup-email-sa
+        run: |
+          # Create service account for Email Assistant if it doesn't exist
+          EMAIL_SA_NAME="test-email-assistant"
+          EMAIL_SA_EMAIL="$EMAIL_SA_NAME@$PROJECT_ID.iam.gserviceaccount.com"
+
+          if ! gcloud iam service-accounts describe $EMAIL_SA_EMAIL &>/dev/null; then
+            echo "Creating service account for Email Assistant: $EMAIL_SA_EMAIL"
+            gcloud iam service-accounts create $EMAIL_SA_NAME --display-name="Email Assistant Service Account"
+            # Add delay to ensure service account is fully propagated
+            echo "Waiting for service account to be fully available..."
+            sleep 10
+          else
+            echo "Email Assistant service account already exists: $EMAIL_SA_EMAIL"
+          fi
+
+          echo "Granting Secret Manager Access role..."
+          if gcloud projects add-iam-policy-binding $PROJECT_ID \
+            --member="serviceAccount:$EMAIL_SA_EMAIL" \
+            --role="roles/secretmanager.secretAccessor"; then
+            echo "Successfully granted Secret Manager Access role"
+          else
+            echo "Error granting Secret Manager Access role"
+            exit 1
+          fi
+
+          echo "Granting Logging Writer role..."
+          if gcloud projects add-iam-policy-binding $PROJECT_ID \
+            --member="serviceAccount:$EMAIL_SA_EMAIL" \
+            --role="roles/logging.logWriter"; then
+            echo "Successfully granted Logging Writer role"
+          else
+            echo "Error granting Logging Writer role"
+            exit 1
+          fi
+
+          # Verify roles were added
+          echo "Verifying roles..."
+          ROLES=$(gcloud projects get-iam-policy $PROJECT_ID \
+            --flatten="bindings[].members" \
+            --format="value(bindings.role)" \
+            --filter="bindings.members:serviceAccount:$EMAIL_SA_EMAIL")
+          echo "Assigned roles: $ROLES"
+
+          # Store the service account email for Cloud Run deployment
+          echo "email_sa=$EMAIL_SA_EMAIL" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        id: build
+        run: |
+          set -e
+          cd model_pipeline
+          IMAGE_URL="gcr.io/$PROJECT_ID/$EMAIL_SERVICE_NAME:$(date +%Y%m%d-%H%M%S)"
+
+          # Run build asynchronously to avoid log streaming
+          echo "Starting Cloud Build for $IMAGE_URL..."
+          gcloud builds submit --tag $IMAGE_URL . --timeout=30m --async
+
+          # Get the build ID
+          echo "Retrieving build ID..."
+          BUILD_ID=$(gcloud builds list --filter="images=$IMAGE_URL" --format="value(id)" --limit=1)
+          if [[ -z "$BUILD_ID" ]]; then
+            echo "Error: Could not retrieve build ID for $IMAGE_URL"
+            exit 1
+          fi
+
+          # Poll for build completion
+          echo "Waiting for build $BUILD_ID to complete..."
+          while true; do
+            BUILD_STATUS=$(gcloud builds describe $BUILD_ID --format="value(status)")
+            case "$BUILD_STATUS" in
+              "SUCCESS")
+                echo "Build $BUILD_ID completed successfully"
+                break
+                ;;
+              "FAILURE"|"CANCELLED"|"TIMEOUT")
+                echo "Error: Build $BUILD_ID failed with status $BUILD_STATUS"
+                gcloud builds log $BUILD_ID
+                exit 1
+                ;;
+              *)
+                echo "Build $BUILD_ID status: $BUILD_STATUS. Waiting..."
+                sleep 10
+                ;;
+            esac
+          done
+
+          echo "Build completed successfully. Image pushed to $IMAGE_URL"
+          echo "image=$IMAGE_URL" >> $GITHUB_OUTPUT
+
+      - name: Deploy to Cloud Run
+        run: |
+          MLFLOW_URL="${{ needs.build-and-deploy-mlflow.outputs.mlflow_url }}"
+          echo "MLflow URL from previous job: '$MLFLOW_URL'"
+          if [[ -z "$MLFLOW_URL" ]]; then
+            echo "Warning: MLflow URL not available from previous job, using environment variable"
+            MLFLOW_URL="$MLFLOW_TRACKING_URI"
+            echo "MLflow URL from environment: '$MLFLOW_URL'"
+            if [[ -z "$MLFLOW_URL" ]]; then
+              echo "Warning: No MLflow URL available, using default"
+              MLFLOW_URL="https://test-mlflow-server-$PROJECT_ID.$REGION.run.app"
+              echo "Using default MLflow URL: $MLFLOW_URL"
+            fi
+          fi
+          EMAIL_CONNECTION_NAME="${PROJECT_ID}:${REGION}:${EMAIL_DB_INSTANCE}"
+          EMAIL_SA_EMAIL="${{ steps.setup-email-sa.outputs.email_sa }}"
+          if [[ -z "$EMAIL_SA_EMAIL" ]]; then
+            echo "Warning: Email service account not available, using direct construction"
+            EMAIL_SA_EMAIL="$EMAIL_SERVICE_NAME@$PROJECT_ID.iam.gserviceaccount.com"
+          fi
+
+          echo "Using service account: $EMAIL_SA_EMAIL"
+          echo "Using MLflow URL: $MLFLOW_URL"
+
+          gcloud run deploy $EMAIL_SERVICE_NAME \
+            --image ${{ steps.build.outputs.image }} \
+            --platform managed \
+            --region $REGION \
+            --service-account $EMAIL_SA_EMAIL \
+            --allow-unauthenticated \
+            --min-instances $MIN_INSTANCES \
+            --max-instances $MAX_INSTANCES \
+            --memory $MEMORY \
+            --cpu $CPU \
+            --timeout $TIMEOUT \
+            --concurrency $CONCURRENCY \
+            --set-env-vars "DB_NAME=$DB_NAME,DB_USER=$DB_USER,DB_PASSWORD=$DB_PASSWORD,DB_HOST=$DB_HOST,DB_PORT=$DB_PORT,GCP_LOCATION=$GCP_LOCATION,GEMINI_MODEL=$GEMINI_MODEL,DB_SOCKET_DIR=$DB_SOCKET_DIR,INSTANCE_CONNECTION_NAME=$EMAIL_CONNECTION_NAME,MLFLOW_TRACKING_URI=$MLFLOW_URL,NOTIFICATION_SENDER_EMAIL=$NOTIFICATION_SENDER_EMAIL,NOTIFICATION_RECIPIENT_EMAIL=$NOTIFICATION_RECIPIENT_EMAIL,MLFLOW_EXPERIMENT_NAME=$MLFLOW_EXPERIMENT_NAME,FLASK_PORT=$FLASK_PORT,GMAIL_API_SECRET_ID=$GMAIL_API_SECRET_ID,GMAIL_NOTIFICATION_SECRET_ID=$GMAIL_NOTIFICATION_SECRET_ID,SERVICE_ACCOUNT_SECRET_ID=$SERVICE_ACCOUNT_SECRET_ID" \
+            --add-cloudsql-instances=$EMAIL_CONNECTION_NAME \
+            --command="python" \
+            --args="scripts/fetch_gmail_threads.py"
+
+      - name: Get Service URL
+        run: |
+          SERVICE_URL=$(gcloud run services describe $EMAIL_SERVICE_NAME --region $REGION --format 'value(status.url)')
+          echo "::notice::Deployment successful! Service URL: $SERVICE_URL"
