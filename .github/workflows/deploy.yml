@@ -346,9 +346,44 @@ jobs:
     - name: Build and push Docker image
       id: build
       run: |
+        set -e
         cd model_pipeline
         IMAGE_URL="gcr.io/$PROJECT_ID/$EMAIL_SERVICE_NAME:$(date +%Y%m%d-%H%M%S)"
-        gcloud builds submit --tag $IMAGE_URL . --timeout=30m
+        
+        # Run build asynchronously to avoid log streaming
+        echo "Starting Cloud Build for $IMAGE_URL..."
+        gcloud builds submit --tag $IMAGE_URL . --timeout=30m --async
+        
+        # Get the build ID
+        echo "Retrieving build ID..."
+        BUILD_ID=$(gcloud builds list --filter="images=$IMAGE_URL" --format="value(id)" --limit=1)
+        if [[ -z "$BUILD_ID" ]]; then
+          echo "Error: Could not retrieve build ID for $IMAGE_URL"
+          exit 1
+        fi
+        
+        # Poll for build completion
+        echo "Waiting for build $BUILD_ID to complete..."
+        while true; do
+          BUILD_STATUS=$(gcloud builds describe $BUILD_ID --format="value(status)")
+          case "$BUILD_STATUS" in
+            "SUCCESS")
+              echo "Build $BUILD_ID completed successfully"
+              break
+              ;;
+            "FAILURE"|"CANCELLED"|"TIMEOUT")
+              echo "Error: Build $BUILD_ID failed with status $BUILD_STATUS"
+              gcloud builds log $BUILD_ID
+              exit 1
+              ;;
+            *)
+              echo "Build $BUILD_ID status: $BUILD_STATUS. Waiting..."
+              sleep 10
+              ;;
+          esac
+        done
+        
+        echo "Build completed successfully. Image pushed to $IMAGE_URL"
         echo "image=$IMAGE_URL" >> $GITHUB_OUTPUT
     
     - name: Deploy to Cloud Run
