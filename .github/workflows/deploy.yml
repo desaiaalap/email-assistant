@@ -206,6 +206,7 @@ jobs:
     
     - name: Deploy MLflow Server to Cloud Run
       run: |
+        set -e
         MLFLOW_CONNECTION_NAME="${PROJECT_ID}:${REGION}:${MLFLOW_DB_INSTANCE}"
         MLFLOW_SA_EMAIL=$(gcloud iam service-accounts list --filter="displayName:MLflow Server Service Account" --format="value(email)")
         
@@ -214,15 +215,32 @@ jobs:
           exit 1
         fi
         
-        # Create volume for MLflow artifacts bucket
-        echo "Creating volume for MLflow artifacts bucket..."
-        gcloud run services update $MLFLOW_SERVICE_NAME \
-          --add-volume=name=mlflow_bucket,type=cloud-storage,bucket=$MLFLOW_BUCKET_NAME \
-          --region $REGION \
-          --update-env-vars="" \
-          2>/dev/null || echo "Creating service with volume..."
+        # Check if the Cloud Run service exists and has the mlflow_bucket volume
+        VOLUME_EXISTS=false
+        if gcloud run services describe $MLFLOW_SERVICE_NAME --region $REGION &>/dev/null; then
+          echo "Checking for existing mlflow_bucket volume in $MLFLOW_SERVICE_NAME..."
+          VOLUME_CONFIG=$(gcloud run services describe $MLFLOW_SERVICE_NAME --region $REGION --format="value(spec.volumes[?name=='mlflow_bucket'].name)")
+          if [[ "$VOLUME_CONFIG" == "mlflow_bucket" ]]; then
+            echo "Volume mlflow_bucket already exists for $MLFLOW_SERVICE_NAME"
+            VOLUME_EXISTS=true
+          else
+            echo "No mlflow_bucket volume found in $MLFLOW_SERVICE_NAME"
+          fi
+        else
+          echo "Cloud Run service $MLFLOW_SERVICE_NAME does not exist yet"
+        fi
+        
+        # Add volume if it doesn't exist
+        if [[ "$VOLUME_EXISTS" == "false" ]]; then
+          echo "Adding volume mlflow_bucket for $MLFLOW_SERVICE_NAME..."
+          gcloud run services update $MLFLOW_SERVICE_NAME \
+            --add-volume=name=mlflow_bucket,type=cloud-storage,bucket=$MLFLOW_BUCKET_NAME \
+            --region $REGION \
+            2>/dev/null || echo "Service does not exist, volume will be added during deployment"
+        fi
         
         # Deploy MLflow server to Cloud Run
+        echo "Deploying MLflow server to Cloud Run..."
         gcloud run deploy $MLFLOW_SERVICE_NAME \
           --image ${{ steps.build-mlflow.outputs.image }} \
           --platform managed \
@@ -239,7 +257,7 @@ jobs:
           --add-volume=name=mlflow_bucket,type=cloud-storage,bucket=$MLFLOW_BUCKET_NAME \
           --add-volume-mount=volume=mlflow_bucket,mount-path=/mnt/gcs \
           --timeout 300s
-          
+        
         # Get the MLflow service URL and save it for the email assistant deployment
         MLFLOW_URL=$(gcloud run services describe $MLFLOW_SERVICE_NAME --region $REGION --format="value(status.url)")
         echo "MLFLOW_TRACKING_URI=$MLFLOW_URL" >> $GITHUB_ENV
