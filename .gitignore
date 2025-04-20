@@ -27,3 +27,5 @@ data_pipeline/tests/data/true_csv/*
 mlruns/
 *.csv
 *.log
+__pycache__
+data_pipeline/__pycache__/

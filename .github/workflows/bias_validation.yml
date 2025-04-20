@@ -4,9 +4,11 @@ on:
   workflow_dispatch:
   push:
     branches:
+      - main
       - model-deployment
     paths:
       - "model_pipeline/scripts/**"
+      - ".github/workflows/bias_validation.yml"
 
 jobs:
   notify:

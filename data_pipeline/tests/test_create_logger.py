@@ -19,6 +19,7 @@ from create_logger import create_logger
 # pylint: enable=wrong-import-position
 
 
+# pylint: disable=duplicate-code
 @pytest.fixture
 def temp_log_path(tmp_path):
     """Fixture to provide a temporary log file path."""

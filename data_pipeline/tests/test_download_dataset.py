@@ -18,6 +18,7 @@ from download_dataset import download_enron_dataset
 # pylint: enable=wrong-import-position
 
 
+# pylint: disable=duplicate-code
 @pytest.fixture
 def setup_paths(tmp_path):
     """Fixture to set up mock paths for save and logging."""

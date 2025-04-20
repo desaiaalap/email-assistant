@@ -23,6 +23,7 @@ from data_quality_setup import setup_gx_context_and_logger
 # pylint: enable=wrong-import-position
 
 
+# pylint: disable=duplicate-code
 @pytest.fixture
 def setup_paths(tmp_path):
     """Fixture to create temporary paths for testing."""

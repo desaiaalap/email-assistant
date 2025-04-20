@@ -9,6 +9,7 @@ import pytest
 import pandas as pd
 
 
+# pylint: disable=duplicate-code
 @pytest.fixture
 def setup_paths(tmp_path):
     """Fixture to create temporary paths for testing."""

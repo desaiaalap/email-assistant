@@ -13,6 +13,7 @@ scripts_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scr
 sys.path.append(scripts_folder)
 
 
+# pylint: disable=duplicate-code
 # pylint: disable=redefined-outer-name
 # pylint: disable=import-outside-toplevel
 @pytest.fixture

@@ -18,6 +18,7 @@ from clean_and_parse_dates import clean_and_parse_dates
 # pylint: enable=wrong-import-position
 
 
+# pylint: disable=duplicate-code
 @pytest.fixture
 def setup_paths(tmp_path):
     """Fixture to create temporary paths for testing."""

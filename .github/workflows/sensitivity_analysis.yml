@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
+      - main
       - model-deployment
     paths:
       - "model_pipeline/scripts/llm_generator.py"

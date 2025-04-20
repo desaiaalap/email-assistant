@@ -19,6 +19,7 @@ from data_quality_validation import validate_data
 # pylint: enable=wrong-import-position
 
 
+# pylint: disable=duplicate-code
 @pytest.fixture
 def setup_paths(tmp_path):
     """Fixture to create temporary paths for testing."""
