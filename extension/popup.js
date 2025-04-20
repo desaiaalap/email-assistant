@@ -437,7 +437,7 @@ function sendFeedback(data, task, rating) {
   logger.log(`Sending feedback payload: ${JSON.stringify(feedbackData)}`);
 
   fetch(
-    "https://email-assistant-673808915782.us-central1.run.app/store_feedback",
+    "https://test-email-assistant-673808915782.us-central1.run.app/store_feedback",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

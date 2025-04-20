@@ -11,6 +11,19 @@ from email.utils import parsedate_to_datetime
 from db_connection import get_db_connection
 
 
+def ensure_user_feedback_table_exists(cur):
+    """
+    Check if the user_feedback table exists, and create it if it doesn't.
+    """
+    cur.execute("""
+        SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = 'user_feedback'
+        )
+    """)
+    exists = cur.fetchone()[0]
+
+
 def save_to_db(message_data, best_output):
     """
     Save email metadata and LLM outputs to Cloud SQL.

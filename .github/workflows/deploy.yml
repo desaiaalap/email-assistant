@@ -1,0 +1,140 @@
+name: Deploy MailMate Email Assistant
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'model_pipeline/**'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'model_pipeline/**'
+  workflow_dispatch:  # Allow manual triggering
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  SERVICE_NAME: email-assistant
+  REGION: us-central1
+  MIN_INSTANCES: 1
+  MAX_INSTANCES: 2
+  MEMORY: 2Gi
+  CPU: 2
+  TIMEOUT: 600s
+  CONCURRENCY: 10
+  DB_NAME: mail_mate_user_data
+  DB_USER: ${{ secrets.DB_USER }}
+  DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+  DB_HOST: test_emaildb
+  DB_PORT: 5432
+  GCP_LOCATION: us-central1
+  GEMINI_MODEL: gemini-1.5-flash-002
+  DB_SOCKET_DIR: /cloudsql
+  INSTANCE_CONNECTION_NAME: ${{ secrets.GCP_PROJECT_ID }}:us-central1:test_emaildb
+
+jobs:
+  test:
+    name: Test Application
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        cd model_pipeline
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Run tests
+      run: |
+        cd model_pipeline/scripts
+        # Add your test commands here
+        # Example: pytest -xvs ../tests/
+
+  build-and-deploy:
+    name: Build and Deploy
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Set up Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        export_default_credentials: true
+    
+    - name: Enable required APIs
+      run: |
+        gcloud services enable cloudbuild.googleapis.com run.googleapis.com \
+          artifactregistry.googleapis.com cloudresourcemanager.googleapis.com \
+          secretmanager.googleapis.com logging.googleapis.com monitoring.googleapis.com
+    
+    - name: Build and push Docker image
+      id: build
+      run: |
+        cd model_pipeline
+        IMAGE_URL="gcr.io/$PROJECT_ID/$SERVICE_NAME:$(date +%Y%m%d-%H%M%S)"
+        gcloud builds submit --tag $IMAGE_URL . --timeout=30m
+        echo "image=$IMAGE_URL" >> $GITHUB_OUTPUT
+    
+    - name: Deploy to Cloud Run
+      run: |
+        gcloud run deploy $SERVICE_NAME \
+          --image ${{ steps.build.outputs.image }} \
+          --platform managed \
+          --region $REGION \
+          --allow-unauthenticated \
+          --min-instances $MIN_INSTANCES \
+          --max-instances $MAX_INSTANCES \
+          --memory $MEMORY \
+          --cpu $CPU \
+          --timeout $TIMEOUT \
+          --concurrency $CONCURRENCY \
+          --set-env-vars "DB_NAME=$DB_NAME,DB_USER=$DB_USER,DB_PASSWORD=$DB_PASSWORD,DB_HOST=$DB_HOST,DB_PORT=$DB_PORT,GCP_LOCATION=$GCP_LOCATION,GEMINI_MODEL=$GEMINI_MODEL,DB_SOCKET_DIR=$DB_SOCKET_DIR,INSTANCE_CONNECTION_NAME=$INSTANCE_CONNECTION_NAME" \
+          --command="python" \
+          --args="scripts/fetch_gmail_threads.py"
+    
+    - name: Get Service URL
+      run: |
+        SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --region $REGION --format 'value(status.url)')
+        echo "::notice::Deployment successful! Service URL: $SERVICE_URL"
+
+  setup-monitoring:
+    name: Setup Monitoring and Scheduler
+    needs: build-and-deploy
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Set up Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        export_default_credentials: true
+    
+    - name: Set up Cloud Scheduler
+      run: |
+        cd model_pipeline/scripts
+        bash setup_cloud_scheduler.sh
+    
+    - name: Set up Cloud Monitoring
+      run: |
+        cd model_pipeline/scripts
+        bash setup_cloud_monitoring.sh
+        bash make_dash2.sh

@@ -1,6 +1,6 @@
 const CLIENT_ID =
   "673808915782-hgbcr3o8tjjct8pvgej9uq4599pc4k0g.apps.googleusercontent.com";
-const REDIRECT_URI = "https://dibopfifimkeojnankjcdmlkcemlifoi.chromiumapp.org";
+const REDIRECT_URI = "https://gefdchcnodcbmcmhofjkmndnkiklfdmf.chromiumapp.org";
 const SCOPES =
   "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email";
 
@@ -413,7 +413,7 @@ function fetchThreadData(token, threadId, email, tasks, sendResponse) {
       console.log("Data with tasks:", data);
 
       fetch(
-        "https://email-assistant-673808915782.us-central1.run.app/fetch_gmail_thread",
+        "https://test-email-assistant-673808915782.us-central1.run.app/fetch_gmail_thread",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
