@@ -77,64 +77,6 @@ def reset_database(confirm=False):
         return False
 
 
-def create_user_prompt_strategies_table():
-    """
-    Create user_prompt_strategies table if it doesn't exist.
-
-    Returns:
-        bool: True if creation successful, False otherwise
-    """
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                # Create the user_prompt_strategies table
-                cur.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS user_prompt_strategies (
-                        id SERIAL PRIMARY KEY,
-                        user_email VARCHAR(100) NOT NULL,
-                        summary_strategy VARCHAR(50) NOT NULL DEFAULT 'default',
-                        action_items_strategy VARCHAR(50) NOT NULL DEFAULT 'default',
-                        draft_reply_strategy VARCHAR(50) NOT NULL DEFAULT 'default',
-                        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        UNIQUE(user_email)
-                    )
-                """
-                )
-
-                # Create indexes for performance
-                cur.execute(
-                    """
-                    CREATE INDEX IF NOT EXISTS idx_user_prompt_strategies_email 
-                    ON user_prompt_strategies(user_email)
-                """
-                )
-
-                cur.execute(
-                    """
-                    CREATE INDEX IF NOT EXISTS idx_user_prompt_strategies_updated 
-                    ON user_prompt_strategies(last_updated)
-                """
-                )
-
-                # Add documentation comments
-                cur.execute(
-                    """
-                    COMMENT ON TABLE user_prompt_strategies IS 
-                    'Stores user-specific prompt strategies based on performance metrics'
-                """
-                )
-
-                conn.commit()
-
-        logging.info("Created user_prompt_strategies table if it didn't exist")
-        return True
-    except Exception as e:
-        logging.error(f"Error creating user_prompt_strategies table: {e}")
-        logging.exception(e)
-        return False
-
-
 def modify_prompt_strategy_changes_table():
     """
     Modify prompt_strategy_changes table to track user-specific changes.
@@ -272,6 +214,156 @@ def initialize_sample_user_strategies():
         logging.error(f"Error initializing sample user strategies: {e}")
         logging.exception(e)
         return False
+
+
+def create_user_feedback_table():
+    """Create user_feedback table if it doesn't exist."""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                # Create the user_feedback table
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS user_feedback (
+                        id SERIAL PRIMARY KEY,
+                        user_email VARCHAR(100) NOT NULL,
+                        message_id VARCHAR(255) NOT NULL,
+                        thread_id VARCHAR(255) NOT NULL,
+                        date DATE,
+                        from_email TEXT,
+                        to_email TEXT,
+                        subject TEXT,
+                        body TEXT,
+                        messages_count INTEGER,
+                        summary TEXT,
+                        action_items TEXT,
+                        draft_reply TEXT,
+                        summary_feedback INTEGER,
+                        action_items_feedback INTEGER,
+                        draft_reply_feedback INTEGER,
+                        prompt_strategy_summary VARCHAR(50),
+                        prompt_strategy_action_items VARCHAR(50),
+                        prompt_strategy_draft_reply VARCHAR(50),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+
+                # Create indexes
+                cur.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_user_feedback_user_email 
+                    ON user_feedback(user_email)
+                    """
+                )
+
+                cur.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_user_feedback_thread_id 
+                    ON user_feedback(thread_id)
+                    """
+                )
+
+                conn.commit()
+
+        logging.info("Created user_feedback table and indexes")
+        return True
+    except Exception as e:
+        logging.error(f"Error creating user_feedback table: {e}")
+        logging.exception(e)
+        return False
+
+
+def create_prompt_strategy_changes_table():
+    """Create prompt_strategy_changes table if it doesn't exist."""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                # Create the prompt_strategy_changes table
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS prompt_strategy_changes (
+                        id SERIAL PRIMARY KEY,
+                        task VARCHAR(50) NOT NULL,
+                        old_strategy VARCHAR(50) NOT NULL,
+                        new_strategy VARCHAR(50) NOT NULL,
+                        change_reason TEXT,
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        user_email VARCHAR(100) NOT NULL
+                    )
+                    """
+                )
+
+                # Create indexes
+                cur.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_prompt_strategy_changes_user 
+                    ON prompt_strategy_changes(user_email)
+                    """
+                )
+
+                cur.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_prompt_strategy_changes_timestamp 
+                    ON prompt_strategy_changes(timestamp)
+                    """
+                )
+
+                conn.commit()
+
+        logging.info("Created prompt_strategy_changes table and indexes")
+        return True
+    except Exception as e:
+        logging.error(f"Error creating prompt_strategy_changes table: {e}")
+        logging.exception(e)
+        return False
+
+
+def create_user_prompt_strategies_table():
+    """Create user_prompt_strategies table if it doesn't exist."""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                # Create the user_prompt_strategies table
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS user_prompt_strategies (
+                        id SERIAL PRIMARY KEY,
+                        user_email VARCHAR(100) NOT NULL,
+                        summary_strategy VARCHAR(50) NOT NULL DEFAULT 'default',
+                        action_items_strategy VARCHAR(50) NOT NULL DEFAULT 'default',
+                        draft_reply_strategy VARCHAR(50) NOT NULL DEFAULT 'default',
+                        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(user_email)
+                    )
+                    """
+                )
+
+                # Create indexes
+                cur.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_user_prompt_strategies_email 
+                    ON user_prompt_strategies(user_email)
+                    """
+                )
+
+                conn.commit()
+
+        logging.info("Created user_prompt_strategies table and indexes")
+        return True
+    except Exception as e:
+        logging.error(f"Error creating user_prompt_strategies table: {e}")
+        logging.exception(e)
+        return False
+
+
+def initialize_all_tables():
+    """Initialize all database tables."""
+    success = True
+    success = success and create_user_feedback_table()
+    success = success and create_prompt_strategy_changes_table()
+    success = success and create_user_prompt_strategies_table()
+    return success
 
 
 def main():
