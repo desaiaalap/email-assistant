@@ -109,23 +109,43 @@ jobs:
     - name: Build and push MLflow Docker image
       id: build-mlflow
       run: |
+        set -e
         cd mlflow_server
         IMAGE_URL="us-central1-docker.pkg.dev/$PROJECT_ID/test-mlflow-repo/mlflow-server:latest"
         
         # Create Artifact Registry repository if it doesn't exist
         if ! gcloud artifacts repositories describe test-mlflow-repo --location=$REGION &>/dev/null; then
+          echo "Creating Artifact Registry repository: test-mlflow-repo"
           gcloud artifacts repositories create test-mlflow-repo --repository-format=docker --location=$REGION
+        else
+          echo "Artifact Registry repository test-mlflow-repo already exists"
         fi
         
-        # Ensure permissions to access Cloud Build logs bucket
-        LOGS_BUCKET="gs://$PROJECT_ID_cloudbuild"
-        echo "Ensuring permissions for $LOGS_BUCKET..."
-        gsutil iam ch serviceAccount:github-actions-deployer@$PROJECT_ID.iam.gserviceaccount.com:roles/storage.objectViewer $LOGS_BUCKET || {
-          echo "Warning: Failed to set logs bucket permissions, proceeding with build"
-        }
+        # Run build asynchronously to avoid log streaming
+        echo "Starting Cloud Build for $IMAGE_URL..."
+        gcloud builds submit --tag $IMAGE_URL . --timeout=30m --async
         
-        # Run the build
-        gcloud builds submit --tag $IMAGE_URL . --timeout=30m
+        # Get the build ID
+        echo "Retrieving build ID..."
+        BUILD_ID=$(gcloud builds list --filter="images=$IMAGE_URL" --format="value(id)" --limit=1)
+        if [[ -z "$BUILD_ID" ]]; then
+          echo "Error: Could not retrieve build ID for $IMAGE_URL"
+          exit 1
+        fi
+        
+        # Wait for the build to complete
+        echo "Waiting for build $BUILD_ID to complete..."
+        gcloud builds wait $BUILD_ID
+        
+        # Verify build status
+        BUILD_STATUS=$(gcloud builds describe $BUILD_ID --format="value(status)")
+        if [[ "$BUILD_STATUS" != "SUCCESS" ]]; then
+          echo "Error: Build $BUILD_ID failed with status $BUILD_STATUS"
+          gcloud builds log $BUILD_ID
+          exit 1
+        fi
+        
+        echo "Build completed successfully. Image pushed to $IMAGE_URL"
         echo "image=$IMAGE_URL" >> $GITHUB_OUTPUT
         
     - name: Create or verify Cloud SQL for MLflow
@@ -215,7 +235,7 @@ jobs:
         MLFLOW_URL=$(gcloud run services describe $MLFLOW_SERVICE_NAME --region $REGION --format="value(status.url)")
         echo "MLFLOW_TRACKING_URI=$MLFLOW_URL" >> $GITHUB_ENV
         
-        echo "MLflow server deployed successfully at: $MLFLOW_URL"
+        echo "Mlflow server deployed successfully at: $MLFLOW_URL"
         # Store the MLflow URL as a GitHub output
         echo "mlflow_url=$MLFLOW_URL" >> $GITHUB_OUTPUT
 
