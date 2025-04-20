@@ -90,10 +90,7 @@ jobs:
         else
           echo "Bucket $MLFLOW_BUCKET_NAME already exists"
         fi
-        
-        # Set Storage Object Admin permissions for service account
-        SERVICE_ACCOUNT=$(gcloud iam service-accounts list --filter="displayName:Cloud Run Service Agent" --format="value(email)")
-        gsutil iam ch serviceAccount:$SERVICE_ACCOUNT:roles/storage.objectAdmin gs://$MLFLOW_BUCKET_NAME
+        echo "Assuming storage.objectAdmin role is assigned to github-actions-deployer or MLflow service account"
     
     - name: Build and push MLflow Docker image
       id: build-mlflow
