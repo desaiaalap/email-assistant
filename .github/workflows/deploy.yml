@@ -331,22 +331,37 @@ jobs:
           echo "Creating service account for Email Assistant: $EMAIL_SA_EMAIL"
           gcloud iam service-accounts create $EMAIL_SA_NAME --display-name="Email Assistant Service Account"
           
-          # Grant required roles
-          gcloud projects add-iam-policy-binding $PROJECT_ID \
-            --member="serviceAccount:$EMAIL_SA_EMAIL" \
-            --role="roles/cloudsql.client"
-          
-          gcloud projects add-iam-policy-binding $PROJECT_ID \
-            --member="serviceAccount:$EMAIL_SA_EMAIL" \
-            --role="roles/secretmanager.secretAccessor"
-
-          # Grant logging roles
-          gcloud projects add-iam-policy-binding $PROJECT_ID \
-            --member="serviceAccount:$EMAIL_SA_EMAIL" \
-            --role="roles/logging.logWriter"
         else
           echo "Email Assistant service account already exists: $EMAIL_SA_EMAIL"
         fi
+
+        echo "Granting Secret Manager Access role..."
+        if gcloud projects add-iam-policy-binding $PROJECT_ID \
+          --member="serviceAccount:$EMAIL_SA_EMAIL" \
+          --role="roles/secretmanager.secretAccessor"; then
+          echo "Successfully granted Secret Manager Access role"
+        else
+          echo "Error granting Secret Manager Access role"
+          exit 1
+        fi
+        
+        echo "Granting Logging Writer role..."
+        if gcloud projects add-iam-policy-binding $PROJECT_ID \
+          --member="serviceAccount:$EMAIL_SA_EMAIL" \
+          --role="roles/logging.logWriter"; then
+          echo "Successfully granted Logging Writer role"
+        else
+          echo "Error granting Logging Writer role"
+          exit 1
+        fi
+        
+        # Verify roles were added
+        echo "Verifying roles..."
+        ROLES=$(gcloud projects get-iam-policy $PROJECT_ID \
+          --flatten="bindings[].members" \
+          --format="value(bindings.role)" \
+          --filter="bindings.members:serviceAccount:$EMAIL_SA_EMAIL")
+        echo "Assigned roles: $ROLES"
         
         # Store the service account email for Cloud Run deployment
         echo "email_sa=$EMAIL_SA_EMAIL" >> $GITHUB_OUTPUT
