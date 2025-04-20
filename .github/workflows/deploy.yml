@@ -46,7 +46,6 @@ env:
   GMAIL_NOTIFICATION_SECRET_ID: gmail-notification
   SERVICE_ACCOUNT_SECRET_ID: service-account-credentials
   MLFLOW_BUCKET_NAME: test-mail-mate-mlflow-logs
-  CREDENTIALS_JSON: ${{ secrets.GCP_SA_KEY }}
 
 jobs:
   build-and-deploy-mlflow:
@@ -57,24 +56,24 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
-
-    - name: Set up credentials
+    
+    - name: Debug GCP_SA_KEY
       run: |
-        echo '${{ secrets.GCP_SA_KEY }}' > ${{ github.workspace }}/gcp-credentials.json
+        echo '${{ secrets.GCP_SA_KEY }}' | jq . || echo "Invalid JSON"
+      env:
+        DEBUG: true
     
     - name: Google Auth
       id: auth
       uses: google-github-actions/auth@v2
       with:
-        credentials_json: ${{ github.workspace }}/gcp-credentials.json
-        project_id: '${{ secrets.GCP_PROJECT_ID }}'
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
     
     - name: Set up Google Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
       with:
         project_id: ${{ secrets.GCP_PROJECT_ID }}
-        service_account_key: ${{ secrets.GCP_SA_KEY }}
-        export_default_credentials: true
     
     - name: Enable required APIs
       run: |
