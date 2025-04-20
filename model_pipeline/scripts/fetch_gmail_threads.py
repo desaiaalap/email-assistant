@@ -40,39 +40,39 @@ from initialize_db import initialize_all_tables
 if IN_CLOUD_RUN:
     from secret_manager import get_credentials_from_secret
 
-# Add this database initialization function
-def create_tables_if_not_exists():
-    """Initialize database tables if they don't exist."""
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                # Check if tables exist
-                cur.execute("""
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.tables 
-                        WHERE table_name = 'user_feedback'
-                    )
-                """)
-                tables_exist = cur.fetchone()[0]
+# # Add this database initialization function
+# def create_tables_if_not_exists():
+#     """Initialize database tables if they don't exist."""
+#     try:
+#         with get_db_connection() as conn:
+#             with conn.cursor() as cur:
+#                 # Check if tables exist
+#                 cur.execute("""
+#                     SELECT EXISTS (
+#                         SELECT FROM information_schema.tables 
+#                         WHERE table_name = 'user_feedback'
+#                     )
+#                 """)
+#                 tables_exist = cur.fetchone()[0]
                 
-                if not tables_exist:
-                    logging.info("Tables don't exist. Creating them...")
-                    # Initialize all tables using imported functions
-                    success = initialize_all_tables()
-                    if success:
-                        logging.info("All tables created successfully.")
-                    else:
-                        logging.error("Error creating some tables.")
-                else:
-                    logging.info("Tables already exist. Skipping initialization.")
-    except Exception as e:
-        logging.error(f"Error initializing database: {e}")
+#                 if not tables_exist:
+#                     logging.info("Tables don't exist. Creating them...")
+#                     # Initialize all tables using imported functions
+#                     success = initialize_all_tables()
+#                     if success:
+#                         logging.info("All tables created successfully.")
+#                     else:
+#                         logging.error("Error creating some tables.")
+#                 else:
+#                     logging.info("Tables already exist. Skipping initialization.")
+#     except Exception as e:
+#         logging.error(f"Error initializing database: {e}")
 
 
 # Initialize Flask application
 app = Flask(__name__)
 
-create_tables_if_not_exists()
+# create_tables_if_not_exists()
 
 # Set up GCP Cloud Logging
 gcp_client = gcp_logging.Client(project=GCP_PROJECT_ID)
