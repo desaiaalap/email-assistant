@@ -186,6 +186,10 @@ jobs:
           gcloud projects add-iam-policy-binding $PROJECT_ID \
             --member="serviceAccount:$MLFLOW_SA_EMAIL" \
             --role="roles/storage.objectAdmin"
+
+          gcloud projects add-iam-policy-binding $PROJECT_ID \
+            --member="serviceAccount:$MLFLOW_SA_EMAIL" \
+            --role="roles/logging.logWriter"
         else
           echo "MLflow service account already exists: $MLFLOW_SA_EMAIL"
         fi
@@ -298,6 +302,11 @@ jobs:
         gcloud projects add-iam-policy-binding $PROJECT_ID \
           --member="serviceAccount:$SERVICE_ACCOUNT" \
           --role="roles/cloudsql.client"
+        
+        gcloud projects add-iam-policy-binding $PROJECT_ID \
+          --member="serviceAccount:$SERVICE_ACCOUNT" \
+          --role="roles/logging.logWriter"
+
       
         # Get the MLflow URL from the previous job
         MLFLOW_URL="${{ needs.build-and-deploy-mlflow.outputs.mlflow_url }}"
@@ -323,7 +332,7 @@ jobs:
           --set-env-vars "DB_NAME=$DB_NAME,DB_USER=$DB_USER,DB_PASSWORD=$DB_PASSWORD,DB_HOST=$DB_HOST,DB_PORT=$DB_PORT,GCP_LOCATION=$GCP_LOCATION,GEMINI_MODEL=$GEMINI_MODEL,DB_SOCKET_DIR=$DB_SOCKET_DIR,INSTANCE_CONNECTION_NAME=$EMAIL_CONNECTION_NAME,MLFLOW_TRACKING_URI=$MLFLOW_URL,NOTIFICATION_SENDER_EMAIL=$NOTIFICATION_SENDER_EMAIL,NOTIFICATION_RECIPIENT_EMAIL=$NOTIFICATION_RECIPIENT_EMAIL,MLFLOW_EXPERIMENT_NAME=$MLFLOW_EXPERIMENT_NAME,FLASK_PORT=$FLASK_PORT,GMAIL_API_SECRET_ID=$GMAIL_API_SECRET_ID,GMAIL_NOTIFICATION_SECRET_ID=$GMAIL_NOTIFICATION_SECRET_ID,SERVICE_ACCOUNT_SECRET_ID=$SERVICE_ACCOUNT_SECRET_ID" \
           --add-cloudsql-instances=$EMAIL_CONNECTION_NAME \
           --command="python" \
-          --args="scripts/fetch_gmail_threads.py"
+          --args="./scripts/fetch_gmail_threads.py"
     
     - name: Get Service URL
       run: |
@@ -391,6 +400,11 @@ gcloud services enable cloudbuild.googleapis.com \
   sqladmin.googleapis.com \
   storage.googleapis.com
 
+
+
+
+
+
 # Create service account for GitHub Actions
 echo ""
 echo "==== Creating Service Account for GitHub Actions ===="
@@ -419,6 +433,10 @@ roles=(
   "roles/cloudsql.admin"
   "roles/artifactregistry.admin"
   "roles/serviceusage.serviceUsageAdmin"
+  "roles/iam.serviceAccountAdmin"
+  "roles/resourcemanager.projectIamAdmin"
+  "roles/storage.objectViewer"
+  "roles/logging.logWriter"
 )
 
 for role in "${roles[@]}"; do
@@ -592,6 +610,7 @@ echo "Granting necessary permissions to the MLflow service account..."
 mlflow_roles=(
   "roles/cloudsql.client"
   "roles/storage.objectAdmin"
+  "roles/logging.logWriter"
 )
 
 for role in "${mlflow_roles[@]}"; do
@@ -705,6 +724,9 @@ if [[ "$deploy_email_assistant" == "y" ]]; then
   gcloud projects add-iam-policy-binding ${GCP_PROJECT_ID} \
     --member="serviceAccount:${SERVICE_ACCOUNT}" \
     --role="roles/cloudsql.client"
+    gcloud projects add-iam-policy-binding ${GCP_PROJECT_ID} \
+    --member="serviceAccount:${SERVICE_ACCOUNT}" \
+    --role="roles/logging.logWriter"
   
   # Deploy to Cloud Run
   echo "Deploying Email Assistant to Cloud Run..."
@@ -749,6 +771,10 @@ if [[ "$deploy_email_assistant" == "y" ]]; then
     gcloud secrets add-iam-policy-binding ${SECRET_ID} \
       --member="serviceAccount:${SERVICE_ACCOUNT}" \
       --role="roles/secretmanager.secretAccessor"
+    
+    gcloud secrets add-iam-policy-binding ${SECRET_ID} \
+      --member="serviceAccount:${SERVICE_ACCOUNT}" \
+      --role="roles/logging.logWriter"
   done
   
 #   # Set up Cloud Scheduler for performance monitoring
