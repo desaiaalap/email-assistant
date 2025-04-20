@@ -8,12 +8,14 @@ on:
       - shubh_desai
     paths:
       - "data_pipeline/scripts/*.py"
+      - ".github/workflows/tests.yml"
   pull_request:
     branches:
       - shubh_desai
       - main
     paths:
       - "data_pipeline/scripts/*.py"
+      - ".github/workflows/tests.yml"
 
 jobs:
   test:
