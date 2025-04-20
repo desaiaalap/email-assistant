@@ -245,7 +245,7 @@ jobs:
           --image ${{ steps.build-mlflow.outputs.image }} \
           --platform managed \
           --region $REGION \
-          --service-account $MLFLOW_SA_EMAIL \
+          --service-account "$MLFLOW_SA_EMAIL" \
           --allow-unauthenticated \
           --min-instances 0 \
           --max-instances 1 \
