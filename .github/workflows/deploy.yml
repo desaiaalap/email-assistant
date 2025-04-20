@@ -117,6 +117,14 @@ jobs:
           gcloud artifacts repositories create test-mlflow-repo --repository-format=docker --location=$REGION
         fi
         
+        # Ensure permissions to access Cloud Build logs bucket
+        LOGS_BUCKET="gs://$PROJECT_ID_cloudbuild"
+        echo "Ensuring permissions for $LOGS_BUCKET..."
+        gsutil iam ch serviceAccount:github-actions-deployer@$PROJECT_ID.iam.gserviceaccount.com:roles/storage.objectViewer $LOGS_BUCKET || {
+          echo "Warning: Failed to set logs bucket permissions, proceeding with build"
+        }
+        
+        # Run the build
         gcloud builds submit --tag $IMAGE_URL . --timeout=30m
         echo "image=$IMAGE_URL" >> $GITHUB_OUTPUT
         
