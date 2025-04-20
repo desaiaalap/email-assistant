@@ -61,7 +61,7 @@ def create_tables_if_not_exists():
                     logging.error("No result returned from table existence query")
                     raise Exception("Failed to check table existence")
 
-                # Access the 'exists' key from the RealDictRow
+                # Access the exists key from the RealDictRow
                 tables_exist = row["exists"]
 
                 logging.info(f"Table existence check result: {tables_exist}")
