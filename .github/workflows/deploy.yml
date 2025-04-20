@@ -208,12 +208,15 @@ jobs:
       run: |
         set -e
         MLFLOW_CONNECTION_NAME="${PROJECT_ID}:${REGION}:${MLFLOW_DB_INSTANCE}"
-        MLFLOW_SA_EMAIL=$(gcloud iam service-accounts list --filter="displayName:MLflow Server Service Account" --format="value(email)")
+        MLFLOW_SA_NAME="test-mlflow-server"
+        MLFLOW_SA_EMAIL="$MLFLOW_SA_NAME@$PROJECT_ID.iam.gserviceaccount.com"
         
         if [[ -z "$MLFLOW_SA_EMAIL" ]]; then
           echo "Error: MLflow Server Service Account not found"
           exit 1
         fi
+
+        echo "Using service account: $MLFLOW_SA_EMAIL"
         
         # Check if the Cloud Run service exists and has the mlflow_bucket volume
         VOLUME_EXISTS=false
