@@ -96,35 +96,8 @@ env:
   MLFLOW_BUCKET_NAME: test-mail-mate-mlflow-logs
 
 jobs:
-  test:
-    name: Test Application
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-
-    - name: Install dependencies
-      run: |
-        cd model_pipeline
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        
-    - name: Run tests
-      run: |
-        cd model_pipeline/scripts
-        # Add your test commands here
-        # Example: pytest -xvs ../tests/
-
   build-and-deploy-mlflow:
     name: Build and Deploy MLflow Server
-    needs: test
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     
