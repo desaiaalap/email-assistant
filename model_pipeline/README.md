@@ -533,9 +533,9 @@ If you encounter issues during deployment:
   - Make sure your `config.js` has the correct SERVER_URL
   - Verify the OAuth client ID matches between manifest.json and config.js
 
-- **CSV FILES SETUP (IF GITHUB ACTIONS FAIL)**:
+- **CSV FILES SETUP (IF GITHUB ACTIONS workflow FAIL)**:
 
-  Our CSV files are set up in dvc too, larger files are fetched up from there. You may need to adjust the `Data file paths` section in `model_pipeline/scripts/config.py` to use your csvs. In the project files mainly SAMPLE & SAMPLE FROM csv are used so adjust them accordingly. To run bias_checker.py you will need to make LABELED_SAMPLE_FROM_CSV_PATH which is just FROM column from enron_emails.csv merged with LABELED_SAMPLE_CSV_PATH. You will need to make this csv in the model_pipeline/data/ path or just replace it with appropriate one.
+  Our CSV files are set up in dvc, larger files are fetched up from there. You may need to adjust the `Data file paths` section in `model_pipeline/scripts/config.py` to use your own csvs. In the project files mainly SAMPLE & SAMPLE FROM csv are used so adjust them accordingly. To run bias_checker.py you will need to make LABELED_SAMPLE_FROM_CSV_PATH which is just FROM column from enron_emails.csv merged with LABELED_SAMPLE_CSV_PATH. You will need to make this csv in the model_pipeline/data/ path or just replace it with appropriate one.
 
 - **Deployment Script Issues**:
 
