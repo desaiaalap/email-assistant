@@ -409,6 +409,16 @@ You will need to create an OAuth Client in GCP. To do this:
 
 **NOTE: We only need to do this since the extension is unpublished. Requires permission from Google to publish on the Chrome Web Store.**
 
+### Secret Manager Setup
+
+The `setup_cicd.sh` script will create three secrets in Secret Manager: `service-account-credentials`, `gmail-credentials`, `gmail-notification`
+
+The secret values for these need to be populated as follows:
+
+- `service-account-credentials`: Upload the `github-actions-sa-key.json` created by the script.
+- `gmail-credentials`: Upload the JSON from the OAuth Client ID.
+- `gmail-notification`: Same as above, but remove the 'installed' key. Also, you will need to add a new key called `refresh_token`. Its value can be set by following instructions in the [Data Pipeline README](/data_pipeline/README.md).
+
 ### Chrome Extension Setup
 
 To install the Chrome extension for testing:
