@@ -1,84 +1,398 @@
-## Table of Contents
+# Model Pipeline and Deployment
 
-1. [Installation & Prerequisites](#installation--prerequisites)
-2. [Model Pipeline Overview](#model-pipeline-overview)
-3. [Code Structure](#code-structure)
-4. [Bias Mitigation](#bias-mitigation)
+## Prerequisites and Environment Setup
 
-# Installation & Prerequisites
+Before deploying MailMate, you'll need to set up your development environment. This section will guide you through installing all necessary tools and dependencies.
 
-### Prerequisites
+### 1. Install Git
 
-1. **git** installed on your machine.
-2. **Python == 3.11** installed (check using `python --version`).
-3. **Docker** daemon/desktop installed and running (for containerizing the Airflow pipeline).
+Git is required for version control and cloning the repository:
 
-### User Installation
+**For Windows:**
+- Download and install Git from [git-scm.com](https://git-scm.com/download/win)
+- Follow the installation wizard with default settings
 
-1. **Clone** the repository:
+**For macOS:**
+- Install using Homebrew: `brew install git`
+- Or download from [git-scm.com](https://git-scm.com/download/mac)
 
+**For Linux (Ubuntu/Debian):**
+```bash
+sudo apt update
+sudo apt install git
+```
+
+Verify installation: `git --version`
+
+### 2. Install Python 3.11
+
+MailMate requires Python 3.11:
+
+**For Windows:**
+- Download Python 3.11 from [python.org](https://www.python.org/downloads/)
+- During installation, check "Add Python to PATH"
+
+**For macOS:**
+```bash
+brew install python@3.11
+```
+
+**For Linux (Ubuntu/Debian):**
+```bash
+sudo apt update
+sudo apt install software-properties-common
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt update
+sudo apt install python3.11 python3.11-venv python3.11-dev
+```
+
+Verify installation: `python --version` or `python3.11 --version`
+
+### 3. Install Docker and Docker Compose
+
+Docker is used for containerization:
+
+**For Windows/macOS:**
+- Download and install [Docker Desktop](https://www.docker.com/products/docker-desktop)
+
+**For Linux (Ubuntu/Debian):**
+```bash
+# Install Docker
+sudo apt update
+sudo apt install apt-transport-https ca-certificates curl software-properties-common
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+sudo apt update
+sudo apt install docker-ce
+
+# Install Docker Compose
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+```
+
+Verify installation: `docker --version` and `docker-compose --version`
+
+### 4. Install Google Cloud SDK (gcloud CLI)
+
+The Google Cloud SDK is required for GCP deployments:
+
+**For all platforms:**
+- Download and install from [cloud.google.com/sdk/docs/install](https://cloud.google.com/sdk/docs/install)
+
+**Alternatively, for macOS:**
+```bash
+brew install --cask google-cloud-sdk
+```
+
+**For Linux (Ubuntu/Debian):**
+```bash
+# Add the Cloud SDK distribution URI as a package source
+echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+
+# Import the Google Cloud public key
+curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+
+# Update and install the SDK
+sudo apt update
+sudo apt install google-cloud-sdk
+```
+
+After installation, initialize gcloud:
+```bash
+gcloud init
+```
+
+This will open a browser window for authentication. Follow the prompts to:
+- Login with your Google account
+- Select or create a GCP project
+- Configure default region and zone
+
+### 5. Install GitHub CLI
+
+GitHub CLI is useful for managing GitHub repositories and secrets:
+
+**For Windows:**
+- Download from [cli.github.com](https://cli.github.com/)
+- Follow installation wizard
+
+**For macOS:**
+```bash
+brew install gh
+```
+
+**For Linux (Ubuntu/Debian):**
+```bash
+curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+sudo apt update
+sudo apt install gh
+```
+
+Authenticate with GitHub:
+```bash
+gh auth login
+```
+
+Follow the interactive prompts to complete authentication.
+
+### 6. Clone the Repository
+
+Once all prerequisites are installed, clone the repository:
+
+```bash
+git clone https://github.com/yourusername/email-assistant.git
+cd email-assistant
+```
+
+## Model Pipeline Overview
+
+The MailMate email assistant employs a model pipeline using Google's Vertex AI services for generating summaries, action items, and draft replies from email content.
+
+### Model Architecture
+
+Our system utilizes a Gemini model (`gemini-1.5-flash-002`), which we selected after comparing performance across tasks, speed and cost. The model architecture includes:
+
+- **LLM Generator**: Processes email content to generate multiple candidate outputs for each task
+- **LLM Ranker**: Evaluates and ranks candidate outputs based on quality criteria
+- **Output Verifier**: Ensures outputs meet structural requirements before delivering to users
+
+### Performance Monitoring and Metrics
+
+We track several key metrics to monitor model performance:
+
+- **Positive Feedback Rate**: Percentage of positive and negative feedback
+- **Task Performance Score**: Task-specific threshold for summaries, action items, and replies
+- **Bias Detection**: Measurements across different data slices to ensure fairness
+
+### Prompt Optimization and Strategy
+
+We employ dynamic prompt optimization based on user feedback:
+
+- **Default Strategy**: Initial prompt template for most users
+- **Alternate Strategy**: Used when performance drops below threshold
+- **User-Specific Optimization**: Sets strategies for individual users based on their recent feedback patterns
+
+### Experiment Tracking
+
+We use MLflow for experiment tracking, which allows:
+
+- Logging of model parameters and metrics
+- Comparison of different prompt strategies
+- Logging of model artifacts
+- Visualization of performance trends
+
+### Bias Detection
+
+Our system performs bias detection across data slices to ensure fairness:
+
+- **Email Length Slicing**: Analyzes performance across short, medium, and long emails
+- **Email Complexity Slicing**: Tests performance on emails of varying complexity
+- **Sender Role Slicing**: Ensures consistent performance regardless of sender's role
+
+The bias checking is run through `bias_checker.py` and results are tracked in MLflow.
+
+### Sensitivity Analysis
+
+We conduct sensitivity analysis to understand how the model responds to:
+
+- **Input Perturbations**: Testing robustness to changes in email content
+- **Prompt Variations**: Measuring impact of different prompt styles
+- **Parameter Sensitivity**: Analyzing effects of temperature and token limits
+
+The sensitivity analysis is implemented in `sensitivity_analysis.py`.
+
+## Cloud Deployment
+
+Our project is deployed on Google Cloud Platform using Cloud Run, Cloud SQL, and MLflow for experiment tracking. The deployment is fully automated through GitHub Actions CI/CD pipeline.
+
+### Deployment Architecture
+
+- **Email Assistant API**: Runs on Cloud Run, processing email requests
+- **MLflow Server**: Runs on Cloud Run for experiment tracking
+- **Cloud SQL Database**: Stores user feedback and prompt optimization data
+- **GCP Logging & Monitoring**: Tracks performance metrics and anomalies
+
+### Monitoring and Alerts
+
+The system includes comprehensive monitoring:
+
+- **Cloud Monitoring Dashboard**: Visualizes key performance metrics
+- **Log-based Metrics**: Tracks performance scores, processing times, and error rates
+- **Automated Alerting**: Sends notifications when metrics drop below thresholds
+
+### Automated Retraining
+
+Our pipeline automatically updates prompt strategies when performance drops:
+
+1. System monitors positive feedback rates and performance metrics
+2. When metrics fall below threshold (70%), it switches to alternate strategies
+3. Daily scheduled checks evaluate all users' performance
+4. User-specific optimizations are made based on individual patterns
+
+## Deployment Instructions
+
+### Automatic Deployment Using CI/CD Script
+
+For a fully automated deployment experience, follow these steps:
+
+1. **Fork the Repository**: Fork this repository to your GitHub account
+
+2. **Set Up Google Cloud Project**:
+   
+   If you don't have a GCP project yet:
    ```bash
-   git clone https://github.com/pshkrh/email-assistant.git
-   cd email-assistant/model_pipeline
+   # Create a new GCP project
+   gcloud projects create [PROJECT_ID] --name="MailMate Email Assistant"
+   
+   # Set it as the active project
+   gcloud config set project [PROJECT_ID]
+   
+   # Enable billing (required for most GCP services)
+   gcloud billing projects link [PROJECT_ID] --billing-account=[BILLING_ACCOUNT_ID]
    ```
 
-2. **Check Python version** (3.11):
+3. **Run the Setup Script**: Execute the setup script which configures the entire deployment pipeline:
 
    ```bash
-    python --version
+   chmod +x setup_cicd.sh
+   ./setup_cicd.sh
    ```
 
-<!-- 3. **Install dependencies**:
+   The script will prompt you for:
+   - Email settings for notifications
+   
+   This script will:
+   - Initialize Google Cloud resources (Cloud Run, Cloud SQL, Servie Accounts, etc.)
+   - Set up GitHub Actions for CI/CD
+   - Configure authentication and permissions
+   - Create required database schemas
+   - Deploy the initial version of MailMate backend
 
-   ```bash
-   pip install -r requirements.txt
-   ``` -->
+4. **Verify Deployment**: Once the script completes, you should have:
+   - A running Email Assistant service on Cloud Run
+   - A running MLflow server for experiment tracking
+   - A bucket for MLflow
+   - One database each for the Email Assistant and MLflow service
+   - A CI/CD pipeline that automatically deploys changes
 
-3. Google Cloud Credentials
 
-   - Create a credentials folder (if not present) inside model_pipeline/
-   - Download Oauth client credentials,
-     - Select Application as Desktop and give scope of GmailAPIService (https://mail.google.com/), Follow this (https://support.google.com/googleapi/answer/6158849?hl=en).
-     - Store it with name MailMateCredential.json inside credentials folder
-   - Create and download service account in Google cloud project
-     - Store it with name GoogleCloudCredential.json inside credentials folder
+### OAuth Client ID setup
 
-4. Set Up .env
+You will need to create an OAuth Client in GCP. To do this:
 
-- Create .env in model_pipeline/ folder, check .env_sample
+1. Go to GCP Console > APIs and Services > Credentials > Create Credentials > OAuth Client
+2. Set application type as 'Web Application'
+3. Set the name
+4. Create
+5. Copy the Client ID
+6. Go to the Data Access Tab > 'Add or remove scopes'
+7. Set the following scopes:
+    - userinfo.email
+    - gmail.send
+    - gmail.readonly
+8. Go to Audience Tab > 'Add users' under Test Users
+9. Put in the Gmail address that you want to use with the extension.
 
-4. Run Docker
-   - docker compose up --build
+**NOTE: We only need to do this since the extension is unpublished. Requires permission from Google to publish on the Chrome Web Store.**
 
-# Code Structure
+### Chrome Extension Setup
 
-- model_pipeline/
-  - This it the main folder for model_pipeline development
-  - credentials/
-    - This folder contains the OAuth, Service account and user GMAIL credentials
-  - data/
-    - This folder conatins the data to be used or saved
-  - scripts/
-    - This folder contains all the scripts used for model pipeline
-      - config.py: Sets up configuration to used across files
-      - data_loader.py: Loads enron data and returns dataframe
-      - get_project_root.py: Returns project root directory
-      - render_prompt.py: Renders prompt for llm_generator
-      - render_criteria.py: Renders criteria for llm_ranker
-      - fetch_gmail_threads.py: Get thread from gmail
-      - main.py: Runs the pipeline
-      - llm_generator.py: Sends request to LLM for provided tasks and return dictionary
-      - llm_ranker.py: Sends request to LLM to rank llm_generator outputs
-      - output_verifier.py: Verifies if the llm_ranker output is as expected
-      - validation.py: Validates labeled and predicted data
+To install the Chrome extension for testing:
 
----
+1. Open Chrome and navigate to `chrome://extensions/`
+2. Enable "Developer mode" in the top-right corner
+3. Click "Load unpacked" and select the `extension` folder from this repository
+4. Copy the extension ID shown
+5. Replace the value in `REDIRECT_URI` in `config.js`. 
+    ```REDIRECT_URI: "https://<extension_id>.chromiumapp.org"```
 
-# Bias Mitigation
+6. Copy the Email Assistant Cloud Run Function endpoint and replace it in `SERVER_URL` and `FEEDBACK_URL` in `config.js`.
+    ```
+    SERVER_URL: "https://<endpoint_url>/fetch_gmail_thread"
+    
+    FEEDBACK_URL: "https://<endpoint_url>/store_feedback"
 
-- We detected biasness in LLM output for body lengths
-  - To mitigate we created data for different lengths with equal quantity
-- Tested if it gives different output for different roles
-- Kept equal data with and without subject
-- Kept equal data with and without action_items
-- Kept equal data with unknown email id
+    ```
+7. Replace the value in `CLIENT_ID` in `config.js`. 
+    ```CLIENT_ID: "<client_id>.apps.googleusercontent.com"```
+8. Refresh the extension by clicking the reload icon on the extensions page in the browser.
+9. The MailMate extension should now be installed and visible in your extensions list
+10. Pin the extension to your toolbar for easy access
+11. Open a Gmail thread and click the MailMate icon to use the assistant
+12. Paste the REDIRECT_URI as an authorized redirect URI in your OAuth Client (follow the same steps to open the settings as before).
+
+## Testing the Deployment
+
+To verify your deployment:
+
+1. **Health Check**: Visit `https://<your-service-url>/health` to ensure the service is running
+
+2. **Test with Extension**: Use the Chrome extension with Gmail to test the full workflow:
+   - Open Gmail and select an email
+   - Click the MailMate icon
+   - Select tasks (summary, action items, or draft reply)
+   - Click "Analyze Email" to test the service
+   - Authorize with your Google Account
+   - View the outputs from the AI and provide feedback
+
+## Video Demonstration
+
+For a complete walkthrough of the deployment process and system functionality, please watch our demonstration video: [Video Link Here](https://drive.google.com/file/d/1Jr1CoPq95whpQ-tOgsVYKPlwb9RK5W4s/view?usp=sharing)
+
+## Troubleshooting
+
+If you encounter issues during deployment:
+
+- **Authentication Errors**: 
+  - Check if your Google Cloud credentials are properly set up
+  - Verify your service account has the necessary permissions
+  - Run `gcloud auth application-default login` to refresh credentials
+  - The GitHub Actions deployment might fail due to `gcloud auth`
+    - Use the following commands to reset the secret in your GitHub account:
+    ```
+    gh secret delete GCP_SA_KEY --repo="your_username/email-assistant"
+    
+    cat github-actions-sa-key.json | gh secret set GCP_SA_KEY --repo="your_username/email-assistant"
+    ```
+
+- **'No Gmail Window Found' error in extension**:
+  - If you see this type of error in the extension, refresh the Gmail page in your browser.
+
+- **Failure in setup_cicd.sh due to not finding a valid Service Account**:
+  - This is unlikely to happen, but it usually does when the newly created account is not made visible to the SDK. If this happens, you can simply re-run the script again.
+
+- **Database Connection Issues**: 
+  - Verify that your Cloud SQL instance is running and accessible
+  - Check if your IP is allowlisted in Cloud SQL settings
+  - Test connection using `gcloud sql connect [INSTANCE_NAME] --user=postgres`
+
+- **Extension Errors**: 
+  - Check the console logs in Chrome DevTools for detailed error messages
+  - Make sure your `config.js` has the correct SERVER_URL
+  - Verify the OAuth client ID matches between manifest.json and config.js
+
+- **Deployment Script Issues**:
+  - If `setup_cicd.sh` fails, check the output for specific error messages
+  - Make sure you have the necessary permissions in your GCP project
+  - Try running commands from the script individually to isolate issues
+
+- **Logging**: 
+  - Check Cloud Logging for detailed error messages from the service
+  - Filter logs by resource type (Cloud Run) and service name
+
+- **MLflow Server Issues**:
+  - Verify the MLflow server is running: `curl https://[MLFLOW-URL]/`
+  - Check if the bucket for artifacts exists and is accessible
+
+## Additional Scripts
+
+The repository includes several utility scripts:
+
+- `test_endpoints.py`: Tests all API endpoints for functionality
+- `prompt_update_demo.py`: Demonstrates the prompt optimization system
+- `populate_metrics.py`: Generates synthetic logs for dashboard testing
+- `runmetricsdemo.sh`: Sets up and runs a metrics demonstration
+
+## Contact
+
+For questions or collaboration, please reach out to any of the team members listed at the top of this README or open an issue on this GitHub repository.
