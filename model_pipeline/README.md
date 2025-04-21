@@ -144,6 +144,120 @@ git clone https://github.com/yourusername/email-assistant.git
 cd email-assistant
 ```
 
+## Directory Structure
+
+The `model_pipeline` directory contains all components of the AI model infrastructure:
+
+```
+model_pipeline/
+├── Dockerfile                   # Docker container configuration
+├── Dockerfile_validation        # Container for validation tasks
+├── README.md                    # Documentation
+├── bias_validation_requirements.txt  # Dependencies for bias validation
+├── credentials/                 # API credential storage
+│   ├── GoogleCloudCredential.json  # GCP service account key
+│   ├── MailMateCredential.json     # OAuth credentials
+│   └── user_tokens/                # User token storage
+├── docker-compose.yaml          # Docker configuration
+├── requirements.txt             # Primary dependencies
+├── scripts/                     # Core model and API scripts
+│   ├── bias_checker.py          # Bias detection and analysis
+│   ├── config.py                # Configuration settings
+│   ├── data_loader.py           # Data loading utilities
+│   ├── db_connection.py         # Database connection handling
+│   ├── db_helpers.py            # Database utility functions
+│   ├── fetch_gmail_threads.py   # Main API server
+│   ├── generate_gcp_metrics.py  # Metrics generation for monitoring
+│   ├── get_project_root.py      # Path utility
+│   ├── initialize_db.py         # Database initialization
+│   ├── llm_generator.py         # Core LLM generation logic
+│   ├── llm_ranker.py            # Output ranking system
+│   ├── load_prompts.py          # Prompt template loading
+│   ├── main.py                  # Entry point
+│   ├── mlflow_config.py         # MLflow experiment tracking setup
+│   ├── monitoring_api.py        # Performance monitoring endpoints
+│   ├── output_verifier.py       # Output format validation
+│   ├── performance_monitor.py   # User feedback monitoring
+│   ├── populate_metrics.py      # Metrics population script
+│   ├── prompt_update_demo.py    # Prompt optimization demo
+│   ├── render_alternate_prompt.py  # Alternate prompt renderer
+│   ├── render_criteria.py       # Ranking criteria renderer
+│   ├── render_prompt.py         # Standard prompt renderer
+│   ├── save_to_database.py      # Database storage utilities
+│   ├── secret_manager.py        # Secrets management
+│   ├── send_notification.py     # Email notification system
+│   ├── sensitivity_analysis.py  # Model sensitivity testing
+│   ├── setup_cloud_monitoring.sh # GCP monitoring setup
+│   ├── setup_cloud_scheduler.sh # Scheduled tasks setup
+│   ├── test_endpoints.py        # API endpoint testing
+│   ├── update_database.py       # Database update utilities
+│   └── validation.py            # Output validation
+└── sensitivity_analysis_requirements.txt  # Dependencies for analysis
+```
+
+### Key Script Files
+
+- **fetch_gmail_threads.py**: Core API server that processes email threads and generates AI responses
+- **llm_generator.py**: Handles generation of summaries, action items, and replies using Vertex AI
+- **llm_ranker.py**: Ranks multiple generated outputs to select the best one
+- **output_verifier.py**: Ensures outputs meet formatting and quality requirements
+- **performance_monitor.py**: Tracks user feedback and optimizes prompt strategies
+- **initialize_db.py**: Sets up database schema for storing user preferences and feedback
+
+### YAML Configuration Files
+
+- **llm_generator_prompts.yaml**: Default generation prompt templates
+- **llm_generator_prompts_alternate.yaml**: Alternative prompt templates for optimization
+- **llm_ranker_criteria.yaml**: Criteria for ranking generated outputs
+- **llm_output_structure.yaml**: Output format specifications
+
+### Monitoring and Analysis
+
+- **generate_gcp_metrics.py**: Creates Cloud Monitoring metrics for tracking performance
+- **bias_checker.py**: Analyzes model outputs for potential biases across different data slices
+- **sensitivity_analysis.py**: Tests model robustness to various inputs and prompt variations
+- **monitoring_api.py**: API endpoints for monitoring system performance and optimization
+- **test_endpoints.py**: Testing framework for API validation
+
+### Database Management
+
+- **db_connection.py**: Handles database connections with Cloud SQL
+- **save_to_database.py**: Stores generated outputs and metadata
+- **update_database.py**: Updates existing records with user feedback
+- **db_helpers.py**: Utility functions for database operations
+
+### Utilities
+
+- **secret_manager.py**: Secure handling of API keys and credentials
+- **send_notification.py**: Error notification system via email
+- **mlflow_config.py**: Configuration for MLflow experiment tracking
+- **config.py**: Central configuration settings
+- **get_project_root.py**: Utility for finding project paths
+
+### Deployment Scripts
+
+- **setup_cloud_monitoring.sh**: Sets up GCP Cloud Monitoring for performance tracking
+- **setup_cloud_scheduler.sh**: Configures scheduled jobs for optimization
+- **setup_cicd.sh**: Sets up CI/CD pipeline for automated deployment
+- **make_dash.sh** and **make_dash2.sh**: Creates monitoring dashboards
+
+### Chrome Extension Files
+
+The Chrome extension components are located in a separate directory:
+
+```
+extension/
+├── background.js              # Background service worker
+├── config.js                  # Configuration settings
+├── content.js                 # Gmail page interaction
+├── icon.png                   # Extension icon
+├── logo.png                   # MailMate logo
+├── manifest.json              # Extension manifest
+├── popup.html                 # Extension popup UI
+├── popup.js                   # Popup functionality
+└── styles.css                 # UI styling
+```
+
 ## Model Pipeline Overview
 
 The MailMate email assistant employs a model pipeline using Google's Vertex AI services for generating summaries, action items, and draft replies from email content.
@@ -311,7 +425,6 @@ To install the Chrome extension for testing:
     SERVER_URL: "https://<endpoint_url>/fetch_gmail_thread"
     
     FEEDBACK_URL: "https://<endpoint_url>/store_feedback"
-
     ```
 7. Replace the value in `CLIENT_ID` in `config.js`. 
     ```CLIENT_ID: "<client_id>.apps.googleusercontent.com"```

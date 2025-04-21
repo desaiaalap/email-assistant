@@ -108,7 +108,7 @@ The dataset is **cleaned, preprocessed, and structured** to remove redundant met
    AIRFLOW_UID=50000
    ```
 
-   - Create GMAIL API Oauth client and download its credential.json (Note: To replicate we need to add your email address to test user so first please contact us to add you as a user),
+   - Create GMAIL API Oauth client and download its credential.json (Note: To replicate we need to add your email address to test user so first please contact us to add you as a user)
 
      - Select Application as Desktop and give scope of GmailAPIService (https://mail.google.com/), Follow this (https://support.google.com/googleapi/answer/6158849?hl=en)
 
@@ -176,103 +176,69 @@ The dataset is **cleaned, preprocessed, and structured** to remove redundant met
 
 MailMate's **data pipeline** is designed to handle **end-to-end email processing**, ensuring efficient data ingestion, transformation, and model training. The pipeline is orchestrated using **Apache Airflow**, which automates workflows, maintains scalability, and ensures fault tolerance. The system follows **MLOps best practices**, including **data validation, version control, anomaly detection, and automated model retraining**.
 
-### **Key Pipeline Components**
+## Directory Structure
 
-MailMate's pipeline consists of several stages to ensure clean, structured, and reproducible data for machine learning.
+The `data_pipeline` directory contains all components related to email data processing:
 
-### **1️⃣ Data Acquisition**
-
-📥 **Goal**: Fetch and store email data from external sources.
-
-- **Enron Dataset Download**: The dataset is ingested from the **Enron Email Dataset**.
-- **Gmail API Integration** : If enabled, real-time emails are fetched from a user's Gmail inbox (with explicit consent).
-- **Storage Format**: Raw email data is stored in **csv files or structured databases** for easy access.
-- **Airflow DAG Task**: `fetch_data_task` automates the **data acquisition process**, ensuring a seamless ingestion pipeline.
-
-### **2️⃣ Data Preprocessing**
-
-🛠️ **Goal**: Transform raw email data into a structured format.
-
-- **Cleaning**:
-  - Remove email footers, disclaimers, and signatures.
-  - Strip HTML tags and unnecessary whitespace.
-  - Remove special characters and stopwords to retain meaningful text.
-- **Named Entity Recognition (NER)**:
-  - Extract key entities such as names, dates, and Timezone.
-- **Airflow DAG Task**: `preprocess_data_task` automates the **data cleaning and transformation process**.
-
-### **3️⃣ Schema Validation**
-
-✔️ **Goal**: Ensure data consistency and enforce schema rules.
-
-- Uses **Great Expectations** to validate the structure of incoming emails.
-- Ensures fields like `sender`, `recipient`, `subject`, and `body` follow predefined formats.
-- **Airflow DAG Task**: `validate_schema_task` runs **automatic schema validation** after preprocessing.
-- **Detects schema drifts**, alerting the team if unexpected changes occur in the data.
-
-### **4️⃣ Data Versioning (DVC)**
-
-📂 **Goal**: Maintain version control of datasets for reproducibility.
-
-- Uses **Data Version Control (DVC)** to track changes in email datasets.
-- Ensures that different versions of the dataset are available for **model reproducibility**.
-- Stores metadata, keeping track of file changes while allowing **rollbacks** if needed.
-- **DVC ensures consistency** across different experiments and team members working with the data.
-- **Airflow DAG Task**: `track_data_version_task` integrates **DVC into the pipeline**, ensuring that every dataset version is properly recorded.
-
-### **5️⃣ Anomaly Detection**
-
-⚠️ **Goal**: Identify irregularities in email patterns and alert the system.
-
-- **Non-Null Constraints:**
-
-  - Ensures that critical fields like `Message-ID`, `From`, and `Body` are never null.
-  - `Date` should not be null in at least 95% of the cases.
-  - `X-From` should not be null in at least 90% of the cases.
-
-- **Email Format Validation:**
-  - Validates that `From`, `To`, `Cc`, and `Bcc` follow proper email regex patterns with 95% accuracy.
-
-**Uniqueness Check:**
-
-- `Message-ID` should be unique across all records.
-
-- **Automated Alert System**:
-  - If anomalies exceed a threshold, **alerts are sent via email**.
-- **Airflow DAG Task**: `detect_anomalies_task` runs **data integrity checks and alerts** the team in case of inconsistencies.
-
-### 6️⃣ **Testing**
-
-Before pushing code to GitHub, it is essential to run tests locally to ensure the project builds successfully and meets code quality standards. Pylint helps enforce PEP 8 guidelines, while Pytest ensures that all functionality works as expected.
-
-### **Code Quality & Linting**
-
-**To run Pylint with Pytest for an integrated quality check:**
-
-```bash
-pytest data_pipeline/ --pylint -v
+```
+data_pipeline/
+├── __init__.py                  # Package initialization
+├── pytest.ini                   # Pytest configuration
+├── scripts/                     # Core processing scripts
+│   ├── __init__.py
+│   ├── clean_and_parse_dates.py # Date field processing
+│   ├── create_logger.py         # Logging utility
+│   ├── data_bias_data_creation.py # Creates data slices for bias detection
+│   ├── data_clean.py            # Main data cleaning script
+│   ├── data_pipeline            # Pipeline orchestration
+│   ├── data_quality_anomaly.py  # Anomaly detection
+│   ├── data_quality_expectations.py # Data validation expectations
+│   ├── data_quality_setup.py    # Great Expectations setup
+│   ├── data_quality_validation.py # Data validation
+│   ├── dataframe.py             # DataFrame processing utilities
+│   ├── download_dataset.py      # Dataset download from source
+│   ├── extract_dataset.py       # Dataset extraction
+│   ├── get_project_root.py      # Path utility
+│   └── google_refresh_token.py  # OAuth token management
+└── tests/                       # Test suite
+    ├── __init__.py
+    ├── conftest.py              # Test configuration
+    ├── test_clean_and_parse_dates.py
+    ├── test_create_logger.py
+    ├── test_data_quality_anomaly.py
+    ├── test_data_quality_expectations.py
+    ├── test_data_quality_setup.py
+    ├── test_data_quality_validation.py
+    ├── test_dataframe.py
+    ├── test_download_dataset.py
+    └── test_extract_dataset.py
 ```
 
-**To test specific modules, use from root directory:**
+### Key Scripts
 
-```bash
-pytest data_pipeline/tests/<test_filename.py> --pylint -v
+- **download_dataset.py**: Downloads the Enron dataset from the source URL
+- **extract_dataset.py**: Extracts the compressed dataset archive
+- **dataframe.py**: Processes email files into a structured DataFrame
+- **data_clean.py**: Performs extensive data cleaning and normalization
+- **clean_and_parse_dates.py**: Specifically handles date field parsing and standardization
+- **data_quality_*.py**: Suite of scripts for data validation and anomaly detection
 
-Like:
+### Data Quality Pipeline
 
-pytest data_pipeline/tests/test_download_dataset.py --pylint -v
-```
+The data quality framework uses **Great Expectations** and includes:
 
-**To run all tests, from root directory run:**
+1. **data_quality_setup.py**: Sets up the validation environment
+2. **data_quality_expectations.py**: Defines validation rules for the dataset
+3. **data_quality_validation.py**: Performs validation against defined expectations
+4. **data_quality_anomaly.py**: Detects and reports anomalies, sending alerts if needed
 
-```bash
-pytest data_pipeline/tests/*.py -v
-```
+### Tests
 
-- **Each stage is scheduled and monitored via Airflow**, ensuring an end-to-end automated workflow.
-- **Gantt charts and logs** in Airflow help identify bottlenecks and optimize processing time.
+Comprehensive test coverage for all script components using pytest:
 
-MailMate's data pipeline is designed for **scalability, automation, and fault tolerance**. By integrating **Airflow, DVC, anomaly detection, and schema validation**, it ensures that email data is **clean, structured, and reliable** for **AI-powered summarization and automation**.
+- Tests for all data processing functions
+- Tests for data quality validation
+- Tests for utility modules
 
 ## Contact
 
