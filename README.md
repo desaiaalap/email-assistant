@@ -46,6 +46,10 @@ A user-friendly Chrome extension that integrates directly with Gmail, allowing u
 
 [See Scoping Document](scoping.pdf)
 
+## Architecture Diagram
+
+<img src="deployment-arch-diag.png" alt="Model Deployment Architecture Diagram"/>
+
 ## Project Setup
 
 See the respective documentation for [data pipeline](data_pipeline/README.md) and [model pipeline](model_pipeline/README.md) for more detailed setup instructions.
