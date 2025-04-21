@@ -9,14 +9,17 @@ Before deploying MailMate, you'll need to set up your development environment. T
 Git is required for version control and cloning the repository:
 
 **For Windows:**
+
 - Download and install Git from [git-scm.com](https://git-scm.com/download/win)
 - Follow the installation wizard with default settings
 
 **For macOS:**
+
 - Install using Homebrew: `brew install git`
 - Or download from [git-scm.com](https://git-scm.com/download/mac)
 
 **For Linux (Ubuntu/Debian):**
+
 ```bash
 sudo apt update
 sudo apt install git
@@ -29,15 +32,18 @@ Verify installation: `git --version`
 MailMate requires Python 3.11:
 
 **For Windows:**
+
 - Download Python 3.11 from [python.org](https://www.python.org/downloads/)
 - During installation, check "Add Python to PATH"
 
 **For macOS:**
+
 ```bash
 brew install python@3.11
 ```
 
 **For Linux (Ubuntu/Debian):**
+
 ```bash
 sudo apt update
 sudo apt install software-properties-common
@@ -53,9 +59,11 @@ Verify installation: `python --version` or `python3.11 --version`
 Docker is used for containerization:
 
 **For Windows/macOS:**
+
 - Download and install [Docker Desktop](https://www.docker.com/products/docker-desktop)
 
 **For Linux (Ubuntu/Debian):**
+
 ```bash
 # Install Docker
 sudo apt update
@@ -77,14 +85,17 @@ Verify installation: `docker --version` and `docker-compose --version`
 The Google Cloud SDK is required for GCP deployments:
 
 **For all platforms:**
+
 - Download and install from [cloud.google.com/sdk/docs/install](https://cloud.google.com/sdk/docs/install)
 
 **Alternatively, for macOS:**
+
 ```bash
 brew install --cask google-cloud-sdk
 ```
 
 **For Linux (Ubuntu/Debian):**
+
 ```bash
 # Add the Cloud SDK distribution URI as a package source
 echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
@@ -98,11 +109,13 @@ sudo apt install google-cloud-sdk
 ```
 
 After installation, initialize gcloud:
+
 ```bash
 gcloud init
 ```
 
 This will open a browser window for authentication. Follow the prompts to:
+
 - Login with your Google account
 - Select or create a GCP project
 - Configure default region and zone
@@ -112,15 +125,18 @@ This will open a browser window for authentication. Follow the prompts to:
 GitHub CLI is useful for managing GitHub repositories and secrets:
 
 **For Windows:**
+
 - Download from [cli.github.com](https://cli.github.com/)
 - Follow installation wizard
 
 **For macOS:**
+
 ```bash
 brew install gh
 ```
 
 **For Linux (Ubuntu/Debian):**
+
 ```bash
 curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
@@ -129,6 +145,7 @@ sudo apt install gh
 ```
 
 Authenticate with GitHub:
+
 ```bash
 gh auth login
 ```
@@ -303,7 +320,7 @@ Our system performs bias detection across data slices to ensure fairness:
 - **Email Complexity Slicing**: Tests performance on emails of varying complexity
 - **Sender Role Slicing**: Ensures consistent performance regardless of sender's role
 
-The bias checking is run through `bias_checker.py` and results are tracked in MLflow.
+The bias checking is run through `bias_checker.py` and results are tracked in MLflow. We adjusted the prompts based on its output to get more accurate results among its range.
 
 ### Sensitivity Analysis
 
@@ -313,7 +330,7 @@ We conduct sensitivity analysis to understand how the model responds to:
 - **Prompt Variations**: Measuring impact of different prompt styles
 - **Parameter Sensitivity**: Analyzing effects of temperature and token limits
 
-The sensitivity analysis is implemented in `sensitivity_analysis.py`.
+The sensitivity analysis is implemented in `sensitivity_analysis.py`. Our model performed well on all the criterias.
 
 ## Cloud Deployment
 
@@ -352,15 +369,16 @@ For a fully automated deployment experience, follow these steps:
 1. **Fork the Repository**: Fork this repository to your GitHub account
 
 2. **Set Up Google Cloud Project**:
-   
+
    If you don't have a GCP project yet:
+
    ```bash
    # Create a new GCP project
    gcloud projects create [PROJECT_ID] --name="MailMate Email Assistant"
-   
+
    # Set it as the active project
    gcloud config set project [PROJECT_ID]
-   
+
    # Enable billing (required for most GCP services)
    gcloud billing projects link [PROJECT_ID] --billing-account=[BILLING_ACCOUNT_ID]
    ```
@@ -373,9 +391,11 @@ For a fully automated deployment experience, follow these steps:
    ```
 
    The script will prompt you for:
+
    - Email settings for notifications
-   
+
    This script will:
+
    - Initialize Google Cloud resources (Cloud Run, Cloud SQL, Servie Accounts, etc.)
    - Set up GitHub Actions for CI/CD
    - Configure authentication and permissions
@@ -389,7 +409,6 @@ For a fully automated deployment experience, follow these steps:
    - One database each for the Email Assistant and MLflow service
    - A CI/CD pipeline that automatically deploys changes
 
-
 ### OAuth Client ID setup
 
 You will need to create an OAuth Client in GCP. To do this:
@@ -401,9 +420,9 @@ You will need to create an OAuth Client in GCP. To do this:
 5. Copy the Client ID
 6. Go to the Data Access Tab > 'Add or remove scopes'
 7. Set the following scopes:
-    - userinfo.email
-    - gmail.send
-    - gmail.readonly
+   - userinfo.email
+   - gmail.send
+   - gmail.readonly
 8. Go to Audience Tab > 'Add users' under Test Users
 9. Put in the Gmail address that you want to use with the extension.
 
@@ -419,6 +438,17 @@ The secret values for these need to be populated as follows:
 - `gmail-credentials`: Upload the JSON from the OAuth Client ID.
 - `gmail-notification`: Same as above, but remove the 'installed' key. Also, you will need to add a new key called `refresh_token`. Its value can be set by following instructions in the [Data Pipeline README](/data_pipeline/README.md).
 
+### GitHub Secret Variable Setup
+
+If you want to run github yml files other than deploy.yml (which is enough if you want to just run model and don't test anything else), you will need to add the following in GitHub -> Your repository -> Setting -> Sectres & variables -> Actions
+
+The secret values for these need to be populated as follows:
+
+- `GCP_GMAIL_SA_KEY_JSON`: base64 endcoded `gmail-notification` value, set in Secret Manager Setup.
+- `GCP_DVC_SA_KEY_JSON`: direct value of `service-account-credentials` set up in Secret Manager Setup.
+- `NOTIFICATION_SENDER_EMAIL`: If not set up yet, it should be the one whose refresh token is added in `gmail-notification` step in Secret Manager Setup.
+- `NOTIFICATION_RECIPIENT_EMAIL`: If not set up yet, add your desired valid recipient.
+
 ### Chrome Extension Setup
 
 To install the Chrome extension for testing:
@@ -427,17 +457,19 @@ To install the Chrome extension for testing:
 2. Enable "Developer mode" in the top-right corner
 3. Click "Load unpacked" and select the `extension` folder from this repository
 4. Copy the extension ID shown
-5. Replace the value in `REDIRECT_URI` in `config.js`. 
-    ```REDIRECT_URI: "https://<extension_id>.chromiumapp.org"```
+5. Replace the value in `REDIRECT_URI` in `config.js`.
+   `REDIRECT_URI: "https://<extension_id>.chromiumapp.org"`
 
 6. Copy the Email Assistant Cloud Run Function endpoint and replace it in `SERVER_URL` and `FEEDBACK_URL` in `config.js`.
-    ```
-    SERVER_URL: "https://<endpoint_url>/fetch_gmail_thread"
-    
-    FEEDBACK_URL: "https://<endpoint_url>/store_feedback"
-    ```
-7. Replace the value in `CLIENT_ID` in `config.js`. 
-    ```CLIENT_ID: "<client_id>.apps.googleusercontent.com"```
+
+   ```
+   SERVER_URL: "https://<endpoint_url>/fetch_gmail_thread"
+
+   FEEDBACK_URL: "https://<endpoint_url>/store_feedback"
+   ```
+
+7. Replace the value in `CLIENT_ID` in `config.js`.
+   `CLIENT_ID: "<client_id>.apps.googleusercontent.com"`
 8. Refresh the extension by clicking the reload icon on the extensions page in the browser.
 9. The MailMate extension should now be installed and visible in your extensions list
 10. Pin the extension to your toolbar for easy access
@@ -466,40 +498,53 @@ For a complete walkthrough of the deployment process and system functionality, p
 
 If you encounter issues during deployment:
 
-- **Authentication Errors**: 
+- **Authentication Errors**:
+
   - Check if your Google Cloud credentials are properly set up
   - Verify your service account has the necessary permissions
   - Run `gcloud auth application-default login` to refresh credentials
   - The GitHub Actions deployment might fail due to `gcloud auth`
+
     - Use the following commands to reset the secret in your GitHub account:
+
     ```
     gh secret delete GCP_SA_KEY --repo="your_username/email-assistant"
-    
+
     cat github-actions-sa-key.json | gh secret set GCP_SA_KEY --repo="your_username/email-assistant"
     ```
 
 - **'No Gmail Window Found' error in extension**:
+
   - If you see this type of error in the extension, refresh the Gmail page in your browser.
 
 - **Failure in setup_cicd.sh due to not finding a valid Service Account**:
+
   - This is unlikely to happen, but it usually does when the newly created account is not made visible to the SDK. If this happens, you can simply re-run the script again.
 
-- **Database Connection Issues**: 
+- **Database Connection Issues**:
+
   - Verify that your Cloud SQL instance is running and accessible
   - Check if your IP is allowlisted in Cloud SQL settings
   - Test connection using `gcloud sql connect [INSTANCE_NAME] --user=postgres`
 
-- **Extension Errors**: 
+- **Extension Errors**:
+
   - Check the console logs in Chrome DevTools for detailed error messages
   - Make sure your `config.js` has the correct SERVER_URL
   - Verify the OAuth client ID matches between manifest.json and config.js
 
+- **CSV FILES SETUP (IF GITHUB ACTIONS FAIL)**:
+
+  Our CSV files are set up in dvc too, larger files are fetched up from there. You may need to adjust the `Data file paths` section in `model_pipeline/scripts/config.py` to use your csvs. In the project files mainly SAMPLE & SAMPLE FROM csv are used so adjust them accordingly. To run bias_checker.py you will need to make LABELED_SAMPLE_FROM_CSV_PATH which is just FROM column from enron_emails.csv merged with LABELED_SAMPLE_CSV_PATH. You will need to make this csv in the model_pipeline/data/ path or just replace it with appropriate one.
+
 - **Deployment Script Issues**:
+
   - If `setup_cicd.sh` fails, check the output for specific error messages
   - Make sure you have the necessary permissions in your GCP project
   - Try running commands from the script individually to isolate issues
 
-- **Logging**: 
+- **Logging**:
+
   - Check Cloud Logging for detailed error messages from the service
   - Filter logs by resource type (Cloud Run) and service name
 
